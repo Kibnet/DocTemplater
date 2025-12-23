@@ -29,16 +29,25 @@ public partial class DataInputView : UserControl
         }
     }
 
-    private async Task<string?> BrowseForSaveFileAsync()
+    private async Task<string?> BrowseForSaveFileAsync(string startingDirectory)
     {
         var topLevel = TopLevel.GetTopLevel(this);
         if (topLevel == null)
             return null;
 
+        var viewModel = DataContext as DataInputViewModel;
+        var suggestedFileName = viewModel?.OutputFileName ?? "document";
+        
+        // Попытаться получить стартовую директорию
+        var suggestedDirectory = string.IsNullOrEmpty(startingDirectory) || !Directory.Exists(startingDirectory)
+            ? null
+            : await topLevel.StorageProvider.TryGetFolderFromPathAsync(startingDirectory);
+
         var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Выберите место для сохранения документа",
-            SuggestedFileName = (DataContext as DataInputViewModel)?.OutputFileName ?? "document",
+            SuggestedFileName = suggestedFileName,
+            SuggestedStartLocation = suggestedDirectory,
             DefaultExtension = "docx",
             FileTypeChoices = new[]
             {

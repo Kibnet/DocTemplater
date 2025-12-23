@@ -112,39 +112,6 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-
-                <!-- Настройки сохранения -->
-                <Border BorderThickness="1" 
-                        CornerRadius="4"
-                        Padding="15">
-                    <StackPanel Spacing="12">
-                        <TextBlock Text="Настройки сохранения" 
-                                   FontSize="16" 
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,0,5"/>
-                        
-                        <!-- Путь к выходному файлу -->
-                        <Grid ColumnDefinitions="120,*,Auto">
-                            <TextBlock Grid.Column="0"
-                                       Text="Выходной файл:"
-                                       VerticalAlignment="Center"/>
-                            
-                            <TextBox Grid.Column="1"
-                                     Text="{Binding OutputFilePath, Mode=TwoWay}"
-                                     Margin="0,0,10,0"
-                                     Name="OutputFilePathTextBox"/>
-                            
-                            <Button Grid.Column="2"
-                                    Content="Обзор..."
-                                    Command="{Binding BrowseOutputPathCommand}"
-                                    Padding="15,8"/>
-                        </Grid>
-                        
-                        <!-- Галочка "Открыть после сохранения" -->
-                        <CheckBox IsChecked="{Binding OpenAfterSave}"
-                                  Content="Открыть после сохранения"/>
-                    </StackPanel>
-                </Border>
             </StackPanel>
         </ScrollViewer>
 
@@ -159,6 +126,25 @@
                     IsEnabled="{Binding !IsSaving}"
                     Padding="20,10"
                     Name="BackButton"/>
+            
+            <!-- Настройки сохранения в центре -->
+            <StackPanel Grid.Column="1" 
+                        Orientation="Horizontal"
+                        HorizontalAlignment="Center"
+                        Spacing="10">
+                <TextBlock Text="Выходной файл:"
+                           VerticalAlignment="Center"
+                           Margin="0,0,10,0"/>
+                <TextBox Text="{Binding OutputFilePath, Mode=TwoWay}"
+                         Width="300"
+                         Name="OutputFilePathTextBox"/>
+                <Button Content="Обзор..."
+                        Command="{Binding BrowseOutputPathCommand}"
+                        Padding="15,8"/>
+                <CheckBox IsChecked="{Binding OpenAfterSave}"
+                          Content="Открыть после сохранения"
+                          VerticalAlignment="Center"/>
+            </StackPanel>
             
             <StackPanel Grid.Column="2"
                         Orientation="Horizontal"

@@ -20,6 +20,7 @@ public class TemplateSelectionViewModel : ViewModelBase
     private Template? _selectedTemplate;
     private bool _isLoading;
     private string _statusMessage = string.Empty;
+    private string _templatesDirectory = string.Empty;
 
     public TemplateSelectionViewModel(
         ITemplateDiscoveryService templateDiscoveryService,
@@ -54,6 +55,61 @@ public class TemplateSelectionViewModel : ViewModelBase
 
         // Автоматическая загрузка при создании
         LoadTemplatesCommand.Execute().Subscribe();
+        
+        // Инициализировать путь к директории шаблонов
+        InitializeTemplatesDirectory();
+    }
+
+    /// <summary>
+    /// Инициализировать путь к директории шаблонов из настроек или сервиса
+    /// </summary>
+    private async void InitializeTemplatesDirectory()
+    {
+        try
+        {
+            if (_valuePersistenceService != null)
+            {
+                var settings = await _valuePersistenceService.LoadSettingsAsync();
+                TemplatesDirectory = settings.TemplatesFolderPath;
+            }
+            else if (_templateDiscoveryService is TemplateDiscoveryService tds)
+            {
+                // Получить текущий путь из сервиса через рефлексию или добавить публичное свойство
+                TemplatesDirectory = Path.Combine(AppContext.BaseDirectory, "Templates");
+            }
+        }
+        catch
+        {
+            TemplatesDirectory = Path.Combine(AppContext.BaseDirectory, "Templates");
+        }
+    }
+
+    /// <summary>
+    /// Обновить директорию шаблонов при изменении текста
+    /// </summary>
+    private async void UpdateTemplatesDirectoryFromText()
+    {
+        if (string.IsNullOrWhiteSpace(_templatesDirectory))
+            return;
+
+        try
+        {
+            if (Directory.Exists(_templatesDirectory))
+            {
+                _templateDiscoveryService.SetTemplatesDirectory(_templatesDirectory);
+                
+                if (_valuePersistenceService != null)
+                {
+                    var settings = await _valuePersistenceService.LoadSettingsAsync();
+                    settings.TemplatesFolderPath = _templatesDirectory;
+                    await _valuePersistenceService.SaveSettingsAsync(settings);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Ошибка при изменении директории: {ex.Message}";
+        }
     }
 
     /// <summary>
@@ -90,6 +146,24 @@ public class TemplateSelectionViewModel : ViewModelBase
     {
         get => _statusMessage;
         set => this.RaiseAndSetIfChanged(ref _statusMessage, value);
+    }
+
+    /// <summary>
+    /// Текущая директория шаблонов
+    /// </summary>
+    public string TemplatesDirectory
+    {
+        get => _templatesDirectory;
+        set
+        {
+            var oldValue = _templatesDirectory;
+            this.RaiseAndSetIfChanged(ref _templatesDirectory, value);
+            if (oldValue != value)
+            {
+                // Обновить путь при ручном изменении
+                UpdateTemplatesDirectoryFromText();
+            }
+        }
     }
 
     /// <summary>
@@ -236,6 +310,7 @@ public class TemplateSelectionViewModel : ViewModelBase
         {
             // Установить новую директорию
             _templateDiscoveryService.SetTemplatesDirectory(selectedPath);
+            TemplatesDirectory = selectedPath;
             
             // Сохранить в настройки
             if (_valuePersistenceService != null)

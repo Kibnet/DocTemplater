@@ -18,6 +18,7 @@ public class DataInputViewModel : ViewModelBase
     private readonly IDocumentGenerationService _documentGenerationService;
     private readonly IValuePersistenceService _valuePersistenceService;
     private readonly CultureInfo _culture;
+    private readonly string _templateDirectory;
     
     private List<PlaceholderFieldViewModel> _fields = new();
     private string _outputDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
@@ -36,9 +37,18 @@ public class DataInputViewModel : ViewModelBase
         _documentGenerationService = documentGenerationService;
         _valuePersistenceService = valuePersistenceService;
         _culture = CultureInfo.GetCultureInfo(cultureName);
+        
+        // Сохранить директорию шаблона
+        _templateDirectory = Path.GetDirectoryName(template.FilePath) ?? string.Empty;
 
         // Установить имя выходного файла по умолчанию
         OutputFileName = $"{template.FileName}_заполненный";
+        
+        // Установить директорию вывода в ту же папку, где шаблон
+        if (!string.IsNullOrEmpty(_templateDirectory))
+        {
+            OutputDirectory = _templateDirectory;
+        }
 
         // Команды с явным указанием планировщика для UI-потока
         SaveCommand = ReactiveCommand.CreateFromTask(
@@ -71,7 +81,16 @@ public class DataInputViewModel : ViewModelBase
     public string OutputDirectory
     {
         get => _outputDirectory;
-        set => this.RaiseAndSetIfChanged(ref _outputDirectory, value);
+        set
+        {
+            var oldValue = _outputDirectory;
+            this.RaiseAndSetIfChanged(ref _outputDirectory, value);
+            if (oldValue != value)
+            {
+                // Обновить OutputFilePath при изменении директории
+                this.RaisePropertyChanged(nameof(OutputFilePath));
+            }
+        }
     }
 
     /// <summary>
@@ -80,7 +99,16 @@ public class DataInputViewModel : ViewModelBase
     public string OutputFileName
     {
         get => _outputFileName;
-        set => this.RaiseAndSetIfChanged(ref _outputFileName, value);
+        set
+        {
+            var oldValue = _outputFileName;
+            this.RaiseAndSetIfChanged(ref _outputFileName, value);
+            if (oldValue != value)
+            {
+                // Обновить OutputFilePath при изменении имени
+                this.RaisePropertyChanged(nameof(OutputFilePath));
+            }
+        }
     }
 
     /// <summary>
@@ -126,9 +154,15 @@ public class DataInputViewModel : ViewModelBase
             var directory = Path.GetDirectoryName(value);
             var fileName = Path.GetFileNameWithoutExtension(value);
             if (!string.IsNullOrEmpty(directory))
+            {
                 OutputDirectory = directory;
+            }
             if (!string.IsNullOrEmpty(fileName))
+            {
                 OutputFileName = fileName;
+            }
+            // Явно уведомить об изменении
+            this.RaisePropertyChanged(nameof(OutputFilePath));
         }
     }
 
@@ -155,7 +189,7 @@ public class DataInputViewModel : ViewModelBase
     /// <summary>
     /// Функция для вызова диалога сохранения файла (устанавливается из View)
     /// </summary>
-    public Func<Task<string?>>? BrowseForSaveFileAsync { get; set; }
+    public Func<string, Task<string?>>? BrowseForSaveFileAsync { get; set; }
 
     /// <summary>
     /// Команда очистки полей
@@ -206,6 +240,18 @@ public class DataInputViewModel : ViewModelBase
     {
         try
         {
+            // Обработка JsonElement из System.Text.Json
+            if (value is System.Text.Json.JsonElement jsonElement)
+            {
+                return dataType switch
+                {
+                    PlaceholderDataType.Integer => jsonElement.GetInt32(),
+                    PlaceholderDataType.DateTimeOffset => jsonElement.GetDateTimeOffset(),
+                    PlaceholderDataType.String => jsonElement.GetString(),
+                    _ => jsonElement.ToString()
+                };
+            }
+            
             return dataType switch
             {
                 PlaceholderDataType.Integer => Convert.ToInt32(value),
@@ -335,7 +381,8 @@ public class DataInputViewModel : ViewModelBase
         {
             if (BrowseForSaveFileAsync != null)
             {
-                var result = await BrowseForSaveFileAsync();
+                // Передать директорию шаблонов как начальную директорию
+                var result = await BrowseForSaveFileAsync(_templateDirectory);
                 if (!string.IsNullOrEmpty(result))
                 {
                     OutputFilePath = result;

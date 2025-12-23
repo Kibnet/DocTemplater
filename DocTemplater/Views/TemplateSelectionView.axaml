@@ -67,37 +67,53 @@
         </Border>
 
         <!-- Панель действий -->
-        <StackPanel Grid.Row="2" 
-                    Orientation="Horizontal" 
-                    HorizontalAlignment="Right"
-                    Spacing="10"
-                    Margin="0,20,0,0">
+        <Grid Grid.Row="2"
+              ColumnDefinitions="*,Auto"
+              Margin="0,20,0,0">
             
-            <Button Content="Изменить директорию..."
-                    Command="{Binding ChangeTemplatesDirectoryCommand}"
-                    IsEnabled="{Binding !IsLoading}"
-                    Padding="20,10"
-                    Name="ChangeDirButton"/>
+            <!-- Путь к директории шаблонов -->
+            <Grid Grid.Column="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,20,0">
+                <TextBlock Grid.Column="0"
+                           Text="Директория:"
+                           VerticalAlignment="Center"
+                           Margin="0,0,10,0"/>
+                <TextBox Grid.Column="1"
+                         Text="{Binding TemplatesDirectory, Mode=TwoWay}"
+                         Watermark="Путь к директории шаблонов"
+                         IsEnabled="{Binding !IsLoading}"
+                         Margin="0,0,10,0"/>
+                <Button Grid.Column="2"
+                        Content="..."
+                        Command="{Binding ChangeTemplatesDirectoryCommand}"
+                        IsEnabled="{Binding !IsLoading}"
+                        Padding="15,10"/>
+            </Grid>
             
-            <Button Content="Редактировать" 
-                    Command="{Binding EditTemplateCommand}"
-                    IsEnabled="{Binding !IsLoading}"
-                    Padding="20,10"
-                    Name="EditButton"/>
-            
-            <Button Content="Обновить" 
-                    Command="{Binding RefreshCommand}"
-                    IsEnabled="{Binding !IsLoading}"
-                    Padding="20,10"
-                    Name="RefreshButton"/>
-            
-            <Button Content="Выбрать" 
-                    Command="{Binding SelectTemplateCommand}"
-                    IsEnabled="{Binding !IsLoading}"
-                    Classes="accent"
-                    Padding="30,10"
-                    Name="SelectTemplateButton"/>
-        </StackPanel>
+            <!-- Кнопки действий -->
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="10">
+                
+                <Button Content="Редактировать" 
+                        Command="{Binding EditTemplateCommand}"
+                        IsEnabled="{Binding !IsLoading}"
+                        Padding="20,10"
+                        Name="EditButton"/>
+                
+                <Button Content="Обновить" 
+                        Command="{Binding RefreshCommand}"
+                        IsEnabled="{Binding !IsLoading}"
+                        Padding="20,10"
+                        Name="RefreshButton"/>
+                
+                <Button Content="Выбрать" 
+                        Command="{Binding SelectTemplateCommand}"
+                        IsEnabled="{Binding !IsLoading}"
+                        Classes="accent"
+                        Padding="30,10"
+                        Name="SelectTemplateButton"/>
+            </StackPanel>
+        </Grid>
 
         <!-- Индикатор загрузки -->
         <Border Grid.Row="0" 

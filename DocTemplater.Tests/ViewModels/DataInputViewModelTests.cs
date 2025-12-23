@@ -30,7 +30,7 @@ public class DataInputViewModelTests
             mockValuePersistence.Object);
 
         // Act
-        Func<Task<string?>> browseFunc = async () => await Task.FromResult("test.docx");
+        Func<string, Task<string?>> browseFunc = async (s) => await Task.FromResult("test.docx");
         viewModel.BrowseForSaveFileAsync = browseFunc;
 
         // Assert
