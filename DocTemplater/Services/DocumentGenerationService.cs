@@ -54,18 +54,25 @@ public class DocumentGenerationService : IDocumentGenerationService
                 return false;
             }
 
-            // Получить все текстовые элементы
-            var textElements = body.Descendants<Text>().ToList();
-            var replacementCount = 0;
+            // Обработать каждый параграф отдельно (плейсхолдеры могут быть разделены между Text элементами)
+            var paragraphs = body.Descendants<Paragraph>().ToList();
+            var totalReplacements = 0;
 
-            foreach (var textElement in textElements)
+            foreach (var paragraph in paragraphs)
             {
-                var text = textElement.Text;
-                var matches = PlaceholderRegex.Matches(text);
+                // Собрать весь текст параграфа
+                var textElements = paragraph.Descendants<Text>().ToList();
+                if (textElements.Count == 0)
+                    continue;
+
+                var paragraphText = string.Concat(textElements.Select(t => t.Text));
+                var matches = PlaceholderRegex.Matches(paragraphText);
 
                 if (matches.Count == 0)
                     continue;
 
+                // Выполнить замены в тексте параграфа
+                var replacedText = paragraphText;
                 foreach (Match match in matches)
                 {
                     var placeholderName = match.Groups["name"].Value.Trim();
@@ -81,17 +88,41 @@ public class DocumentGenerationService : IDocumentGenerationService
                     var formattedValue = FormatValue(placeholderValue.RawValue, format, culture);
 
                     // Заменить плейсхолдер форматированным значением
-                    text = text.Replace(match.Value, formattedValue);
-                    replacementCount++;
+                    replacedText = replacedText.Replace(match.Value, formattedValue);
+                    totalReplacements++;
+                    
+                    _logger?.LogDebug("Заменен плейсхолдер '{Placeholder}' на '{Value}'", match.Value, formattedValue);
                 }
 
-                textElement.Text = text;
+                // Если были замены, обновить параграф
+                if (replacedText != paragraphText)
+                {
+                    // Удалить все существующие Text элементы
+                    foreach (var textElement in textElements)
+                    {
+                        textElement.Remove();
+                    }
+
+                    // Создать новый Run с замененным текстом
+                    var run = paragraph.GetFirstChild<Run>();
+                    if (run == null)
+                    {
+                        run = new Run();
+                        paragraph.AppendChild(run);
+                    }
+                    else
+                    {
+                        run.RemoveAllChildren<Text>();
+                    }
+
+                    run.AppendChild(new Text(replacedText));
+                }
             }
 
             document.Save();
             
             _logger?.LogInformation("Документ успешно сгенерирован: {OutputPath}. Выполнено {Count} замен",
-                outputPath, replacementCount);
+                outputPath, totalReplacements);
 
             return true;
         }
