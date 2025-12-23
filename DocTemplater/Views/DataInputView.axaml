@@ -34,37 +34,26 @@
                         <DataTemplate>
                             <Border BorderThickness="1" 
                                     CornerRadius="4"
-                                    Padding="15"
-                                    Margin="0,0,0,10">
-                                <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="150,*">
+                                    Padding="5"
+                                    Margin="0,0,0,0">
+                                <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*">
                                     
                                     <!-- Название плейсхолдера -->
-                                    <TextBlock Grid.Row="0" 
-                                               Grid.Column="0" 
-                                               Grid.ColumnSpan="2"
+                                    <TextBlock Grid.Row="0" Grid.Column="0"
                                                Text="{Binding Label}" 
                                                FontSize="14" 
                                                FontWeight="SemiBold"
-                                               Margin="0,0,0,8"/>
-                                    
-                                    <!-- Метка поля -->
-                                    <TextBlock Grid.Row="1" 
-                                               Grid.Column="0"
-                                               Text="Значение:"
-                                               VerticalAlignment="Center"
-                                               Margin="0,0,10,0"/>
+                                               Margin="0,0,0,0"/>
                                     
                                     <!-- Поле ввода (TextBox для String) -->
-                                    <TextBox Grid.Row="1" 
-                                             Grid.Column="1"
+                                    <TextBox Grid.Row="1" Grid.Column="0"
                                              Text="{Binding ValueText, Mode=TwoWay}"
                                              Watermark="{Binding Placeholder}"
                                              IsVisible="{Binding IsStringType}"
                                              Name="ValueTextBox"/>
                                     
                                     <!-- Поле ввода числа (NumericUpDown для Integer) -->
-                                    <NumericUpDown Grid.Row="1" 
-                                                   Grid.Column="1"
+                                    <NumericUpDown Grid.Row="1" Grid.Column="0"
                                                    Value="{Binding IntegerValue, Mode=TwoWay}"
                                                    Watermark="Введите число"
                                                    IsVisible="{Binding IsIntegerType}"
@@ -75,37 +64,31 @@
                                                    Name="IntegerValueUpDown"/>
                                     
                                     <!-- Поле ввода даты (DatePicker для DateTimeOffset) -->
-                                    <DatePicker Grid.Row="1" 
-                                                Grid.Column="1"
+                                    <DatePicker Grid.Row="1" Grid.Column="0" 
                                                 SelectedDate="{Binding DateValue, Mode=TwoWay}"
                                                 IsVisible="{Binding IsDateTimeType}"
                                                 Name="DateValuePicker"/>
                                     
                                     <!-- Превью -->
-                                    <TextBlock Grid.Row="2" 
-                                               Grid.Column="0"
-                                               Text="Превью:"
-                                               VerticalAlignment="Top"
-                                               Margin="0,8,10,0"/>
                                     
-                                    <Border Grid.Row="2" 
+                                    <Border Grid.Row="1" 
                                             Grid.Column="1"
                                             BorderThickness="1"
                                             CornerRadius="4"
-                                            Padding="8"
-                                            Margin="0,8,0,0">
+                                            Padding="5"
+                                            Margin="0,0,0,0">
                                         <TextBlock Text="{Binding Preview}" 
                                                    FontFamily="Consolas"
                                                    TextWrapping="Wrap"/>
                                     </Border>
                                     
                                     <!-- Ошибка валидации -->
-                                    <TextBlock Grid.Row="3" 
-                                               Grid.Column="1"
+                                    <TextBlock Grid.Row="2" 
+                                               Grid.ColumnSpan="2"
                                                Text="{Binding ValidationError}"
                                                Foreground="Red"
                                                FontSize="12"
-                                               Margin="0,4,0,0"
+                                               Margin="0,0,0,0"
                                                IsVisible="{Binding !!ValidationError}"/>
                                 </Grid>
                             </Border>
