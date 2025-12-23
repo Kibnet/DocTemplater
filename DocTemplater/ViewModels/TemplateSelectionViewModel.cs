@@ -1,4 +1,5 @@
 using System.Reactive;
+using System.Reactive.Concurrency;
 using DocTemplater.Domain;
 using DocTemplater.Services;
 using ReactiveUI;
@@ -25,12 +26,17 @@ public class TemplateSelectionViewModel : ViewModelBase
         _templateDiscoveryService = templateDiscoveryService;
         _placeholderExtractionService = placeholderExtractionService;
 
-        // Команды
-        LoadTemplatesCommand = ReactiveCommand.CreateFromTask(LoadTemplatesAsync);
+        // Команды с явным указанием планировщика для UI-потока
+        LoadTemplatesCommand = ReactiveCommand.CreateFromTask(
+            LoadTemplatesAsync,
+            outputScheduler: RxApp.MainThreadScheduler);
         SelectTemplateCommand = ReactiveCommand.CreateFromTask(
             SelectTemplateAsync,
-            this.WhenAnyValue(x => x.SelectedTemplate, (Template? template) => template != null));
-        RefreshCommand = ReactiveCommand.CreateFromTask(RefreshTemplatesAsync);
+            this.WhenAnyValue(x => x.SelectedTemplate, (Template? template) => template != null),
+            RxApp.MainThreadScheduler);
+        RefreshCommand = ReactiveCommand.CreateFromTask(
+            RefreshTemplatesAsync,
+            outputScheduler: RxApp.MainThreadScheduler);
 
         // Автоматическая загрузка при создании
         LoadTemplatesCommand.Execute().Subscribe();

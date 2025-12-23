@@ -30,7 +30,7 @@ public class PlaceholderExtractionServiceTests : IDisposable
     public async Task ExtractPlaceholdersAsync_WithStringPlaceholder_ReturnsCorrectPlaceholder()
     {
         // Arrange
-        CreateDocxWithText("{Имя:String()}");
+        CreateDocxWithText("{Имя:String(n)}");
 
         // Act
         var placeholders = await _service.ExtractPlaceholdersAsync(_testFilePath);
@@ -40,7 +40,7 @@ public class PlaceholderExtractionServiceTests : IDisposable
         Assert.Equal("Имя", placeholders[0].Name);
         Assert.Equal(PlaceholderDataType.String, placeholders[0].DataType);
         Assert.Single(placeholders[0].FormatPatterns);
-        Assert.Empty(placeholders[0].FormatPatterns[0]);
+        Assert.Equal("n", placeholders[0].FormatPatterns[0]);
     }
 
     [Fact]

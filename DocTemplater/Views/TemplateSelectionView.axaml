@@ -20,13 +20,11 @@
                        FontWeight="Bold"
                        Margin="0,0,0,10"/>
             <TextBlock Text="Выберите шаблон для заполнения" 
-                       FontSize="14" 
-                       Foreground="#666"/>
+                       FontSize="14" />
         </StackPanel>
 
         <!-- Список шаблонов -->
         <Border Grid.Row="1" 
-                BorderBrush="#E0E0E0" 
                 BorderThickness="1" 
                 CornerRadius="4"
                 Padding="10">
@@ -36,7 +34,8 @@
                 <ListBox Grid.Row="0"
                          ItemsSource="{Binding Templates}"
                          SelectedItem="{Binding SelectedTemplate}"
-                         IsEnabled="{Binding !IsLoading}">
+                         IsEnabled="{Binding !IsLoading}"
+                         Name="TemplatesListBox">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <Border Padding="10" 
@@ -77,25 +76,25 @@
             <Button Content="Обновить" 
                     Command="{Binding RefreshCommand}"
                     IsEnabled="{Binding !IsLoading}"
-                    Padding="20,10"/>
+                    Padding="20,10"
+                    Name="RefreshButton"/>
             
             <Button Content="Выбрать" 
                     Command="{Binding SelectTemplateCommand}"
                     IsEnabled="{Binding !IsLoading}"
                     Classes="accent"
-                    Padding="30,10"/>
+                    Padding="30,10"
+                    Name="SelectTemplateButton"/>
         </StackPanel>
 
         <!-- Индикатор загрузки -->
         <Border Grid.Row="0" 
                 Grid.RowSpan="3"
-                Background="#80000000"
                 IsVisible="{Binding IsLoading}"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch">
             <Border VerticalAlignment="Center" 
                     HorizontalAlignment="Center"
-                    Background="White"
                     Padding="30,20">
                 <StackPanel Spacing="10">
                     <ProgressBar IsIndeterminate="True" 

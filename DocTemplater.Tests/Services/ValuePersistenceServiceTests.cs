@@ -11,8 +11,7 @@ public class ValuePersistenceServiceTests : IDisposable
     public ValuePersistenceServiceTests()
     {
         _testDirectory = Path.Combine(Path.GetTempPath(), $"test_values_{Guid.NewGuid()}");
-        Directory.CreateDirectory(_testDirectory);
-        _service = new ValuePersistenceService(_testDirectory);
+        _service = new ValuePersistenceService(Path.Combine(_testDirectory, "settings.json"));
     }
 
     public void Dispose()
@@ -48,7 +47,7 @@ public class ValuePersistenceServiceTests : IDisposable
         await _service.SaveTemplateValuesAsync(templateName, values);
 
         // Assert
-        var expectedFilePath = Path.Combine(_testDirectory, "test_template.json");
+        var expectedFilePath = Path.Combine(_testDirectory, "settings.json");
         Assert.True(File.Exists(expectedFilePath));
     }
 

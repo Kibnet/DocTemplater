@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Reactive;
+using System.Reactive.Concurrency;
 using DocTemplater.Domain;
 using DocTemplater.Services;
 using ReactiveUI;
@@ -38,15 +39,19 @@ public class DataInputViewModel : ViewModelBase
         // Установить имя выходного файла по умолчанию
         OutputFileName = $"{template.FileName}_заполненный";
 
-        // Команды
-        SaveCommand = ReactiveCommand.CreateFromTask(SaveDocumentAsync);
+        // Команды с явным указанием планировщика для UI-потока
+        SaveCommand = ReactiveCommand.CreateFromTask(
+            SaveDocumentAsync,
+            outputScheduler: RxApp.MainThreadScheduler);
         BackCommand = ReactiveCommand.Create(() => { });
         BrowseOutputDirectoryCommand = ReactiveCommand.Create(BrowseOutputDirectory);
         BrowseOutputPathCommand = ReactiveCommand.Create(BrowseOutputDirectory);
         ClearCommand = ReactiveCommand.Create(ClearFields);
 
         // Загрузить сохраненные значения и создать поля
-        LoadSavedValuesCommand = ReactiveCommand.CreateFromTask(LoadSavedValuesAsync);
+        LoadSavedValuesCommand = ReactiveCommand.CreateFromTask(
+            LoadSavedValuesAsync,
+            outputScheduler: RxApp.MainThreadScheduler);
         LoadSavedValuesCommand.Execute().Subscribe();
     }
 

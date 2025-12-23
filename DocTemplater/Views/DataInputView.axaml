@@ -20,8 +20,7 @@
                        FontWeight="Bold"
                        Margin="0,0,0,10"/>
             <TextBlock Text="Заполните все поля и сохраните документ" 
-                       FontSize="14" 
-                       Foreground="#666"/>
+                       FontSize="14"/>
         </StackPanel>
 
         <!-- Область прокрутки с полями ввода -->
@@ -30,11 +29,10 @@
             <StackPanel Spacing="15">
                 
                 <!-- Динамические поля для плейсхолдеров -->
-                <ItemsControl ItemsSource="{Binding Fields}">
+                <ItemsControl ItemsSource="{Binding Fields}" Name="FieldsItemsControl">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border BorderBrush="#E0E0E0" 
-                                    BorderThickness="1" 
+                            <Border BorderThickness="1" 
                                     CornerRadius="4"
                                     Padding="15"
                                     Margin="0,0,0,10">
@@ -61,13 +59,15 @@
                                              Grid.Column="1"
                                              Text="{Binding ValueText, Mode=TwoWay}"
                                              Watermark="{Binding Placeholder}"
-                                             IsVisible="{Binding !IsDateTimeType}"/>
+                                             IsVisible="{Binding !IsDateTimeType}"
+                                             Name="ValueTextBox"/>
                                     
                                     <!-- Поле ввода даты (DatePicker для DateTimeOffset) -->
                                     <DatePicker Grid.Row="1" 
                                                 Grid.Column="1"
                                                 SelectedDate="{Binding DateValue, Mode=TwoWay}"
-                                                IsVisible="{Binding IsDateTimeType}"/>
+                                                IsVisible="{Binding IsDateTimeType}"
+                                                Name="DateValuePicker"/>
                                     
                                     <!-- Превью -->
                                     <TextBlock Grid.Row="2" 
@@ -78,8 +78,6 @@
                                     
                                     <Border Grid.Row="2" 
                                             Grid.Column="1"
-                                            Background="#F5F5F5"
-                                            BorderBrush="#E0E0E0"
                                             BorderThickness="1"
                                             CornerRadius="4"
                                             Padding="8"
@@ -104,11 +102,9 @@
                 </ItemsControl>
 
                 <!-- Настройки сохранения -->
-                <Border BorderBrush="#E0E0E0" 
-                        BorderThickness="1" 
+                <Border BorderThickness="1" 
                         CornerRadius="4"
-                        Padding="15"
-                        Background="#FAFAFA">
+                        Padding="15">
                     <StackPanel Spacing="12">
                         <TextBlock Text="Настройки сохранения" 
                                    FontSize="16" 
@@ -123,7 +119,8 @@
                             
                             <TextBox Grid.Column="1"
                                      Text="{Binding OutputFilePath, Mode=TwoWay}"
-                                     Margin="0,0,10,0"/>
+                                     Margin="0,0,10,0"
+                                     Name="OutputFilePathTextBox"/>
                             
                             <Button Grid.Column="2"
                                     Content="Обзор..."
@@ -148,7 +145,8 @@
                     Content="← Назад" 
                     Command="{Binding BackCommand}"
                     IsEnabled="{Binding !IsSaving}"
-                    Padding="20,10"/>
+                    Padding="20,10"
+                    Name="BackButton"/>
             
             <StackPanel Grid.Column="2"
                         Orientation="Horizontal"
@@ -157,26 +155,26 @@
                 <Button Content="Очистить" 
                         Command="{Binding ClearCommand}"
                         IsEnabled="{Binding !IsSaving}"
-                        Padding="20,10"/>
+                        Padding="20,10"
+                        Name="ClearButton"/>
                 
                 <Button Content="Сохранить" 
                         Command="{Binding SaveCommand}"
                         IsEnabled="{Binding !IsSaving}"
                         Classes="accent"
-                        Padding="30,10"/>
+                        Padding="30,10"
+                        Name="SaveButton"/>
             </StackPanel>
         </Grid>
 
         <!-- Индикатор сохранения -->
         <Border Grid.Row="0" 
                 Grid.RowSpan="3"
-                Background="#80000000"
                 IsVisible="{Binding IsSaving}"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="Stretch">
             <Border VerticalAlignment="Center" 
                     HorizontalAlignment="Center"
-                    Background="White"
                     Padding="30,20">
                 <StackPanel Spacing="10">
                     <ProgressBar IsIndeterminate="True" 
