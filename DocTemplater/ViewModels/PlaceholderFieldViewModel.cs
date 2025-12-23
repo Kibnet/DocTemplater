@@ -84,6 +84,16 @@ public class PlaceholderFieldViewModel : ViewModelBase
     public bool IsDateTimeType => _placeholder.DataType == PlaceholderDataType.DateTimeOffset;
 
     /// <summary>
+    /// Является ли поле целым числом
+    /// </summary>
+    public bool IsIntegerType => _placeholder.DataType == PlaceholderDataType.Integer;
+
+    /// <summary>
+    /// Является ли поле строкой
+    /// </summary>
+    public bool IsStringType => _placeholder.DataType == PlaceholderDataType.String;
+
+    /// <summary>
     /// Значение в текстовом формате (для TextBox)
     /// </summary>
     public string ValueText
@@ -115,6 +125,15 @@ public class PlaceholderFieldViewModel : ViewModelBase
     public DateTimeOffset? DateValue
     {
         get => Value as DateTimeOffset? ?? (Value as DateTime?)?.ToUniversalTime();
+        set => Value = value;
+    }
+
+    /// <summary>
+    /// Значение целого числа (для NumericUpDown)
+    /// </summary>
+    public int? IntegerValue
+    {
+        get => Value as int?;
         set => Value = value;
     }
 

@@ -6,15 +6,24 @@ namespace DocTemplater.Services;
 /// <summary>
 /// Сервис обнаружения и перечисления DOCX файлов шаблонов
 /// </summary>
-public class TemplateDiscoveryService : ITemplateDiscoveryService
+public class TemplateDiscoveryService : ITemplateDiscoveryService, IDisposable
 {
-    private readonly string _templatesFolderPath;
+    private string _templatesFolderPath;
     private readonly ILogger<TemplateDiscoveryService>? _logger;
+    private FileSystemWatcher? _fileWatcher;
+
+    /// <summary>
+    /// Событие изменения списка шаблонов
+    /// </summary>
+    public event EventHandler? TemplatesChanged;
 
     public TemplateDiscoveryService(string templatesFolderPath, ILogger<TemplateDiscoveryService>? logger = null)
     {
         _templatesFolderPath = templatesFolderPath;
         _logger = logger;
+        
+        // Инициализировать FileSystemWatcher
+        InitializeFileWatcher();
     }
 
     /// <summary>
@@ -82,5 +91,91 @@ public class TemplateDiscoveryService : ITemplateDiscoveryService
         }
 
         return templates;
+    }
+
+    /// <summary>
+    /// Инициализировать FileSystemWatcher для отслеживания изменений
+    /// </summary>
+    private void InitializeFileWatcher()
+    {
+        try
+        {
+            // Создать папку, если не существует
+            if (!Directory.Exists(_templatesFolderPath))
+            {
+                Directory.CreateDirectory(_templatesFolderPath);
+            }
+
+            _fileWatcher = new FileSystemWatcher(_templatesFolderPath)
+            {
+                Filter = "*.docx",
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.CreationTime,
+                EnableRaisingEvents = true
+            };
+
+            // Подписаться на события
+            _fileWatcher.Created += OnFileSystemChanged;
+            _fileWatcher.Deleted += OnFileSystemChanged;
+            _fileWatcher.Changed += OnFileSystemChanged;
+            _fileWatcher.Renamed += OnFileSystemChanged;
+
+            _logger?.LogInformation("Запущен мониторинг директории шаблонов: {Path}", _templatesFolderPath);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "Ошибка при инициализации FileSystemWatcher");
+        }
+    }
+
+    /// <summary>
+    /// Обработчик изменений файловой системы
+    /// </summary>
+    private void OnFileSystemChanged(object sender, FileSystemEventArgs e)
+    {
+        // Игнорировать временные файлы Word
+        if (Path.GetFileName(e.FullPath).StartsWith("~$"))
+            return;
+
+        _logger?.LogDebug("Изменение в директории шаблонов: {ChangeType} - {Name}", e.ChangeType, e.Name);
+        
+        // Вызвать событие изменения
+        TemplatesChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Освободить ресурсы
+    /// </summary>
+    public void Dispose()
+    {
+        if (_fileWatcher != null)
+        {
+            _fileWatcher.EnableRaisingEvents = false;
+            _fileWatcher.Dispose();
+            _fileWatcher = null;
+        }
+    }
+
+    /// <summary>
+    /// Установить новую директорию для шаблонов
+    /// </summary>
+    public void SetTemplatesDirectory(string path)
+    {
+        if (_templatesFolderPath == path)
+            return;
+
+        _templatesFolderPath = path;
+        
+        // Переинициализировать FileSystemWatcher
+        if (_fileWatcher != null)
+        {
+            _fileWatcher.EnableRaisingEvents = false;
+            _fileWatcher.Dispose();
+            _fileWatcher = null;
+        }
+        
+        InitializeFileWatcher();
+        
+        // Уведомить об изменении
+        TemplatesChanged?.Invoke(this, EventArgs.Empty);
     }
 }

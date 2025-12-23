@@ -30,7 +30,8 @@ public partial class MainWindowViewModel : ViewModelBase
         // Начать с экрана выбора шаблона
         var templateSelectionVM = new TemplateSelectionViewModel(
             _templateDiscoveryService,
-            _placeholderExtractionService);
+            _placeholderExtractionService,
+            _valuePersistenceService);
         
         templateSelectionVM.NavigateToDataInput += OnNavigateToDataInput;
         
@@ -63,7 +64,8 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         var templateSelectionVM = new TemplateSelectionViewModel(
             _templateDiscoveryService,
-            _placeholderExtractionService);
+            _placeholderExtractionService,
+            _valuePersistenceService);
         
         templateSelectionVM.NavigateToDataInput += OnNavigateToDataInput;
         

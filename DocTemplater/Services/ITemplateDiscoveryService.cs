@@ -18,4 +18,9 @@ public interface ITemplateDiscoveryService
     /// </summary>
     /// <returns>Обновленная коллекция шаблонов</returns>
     Task<List<Template>> RefreshTemplatesAsync();
+    
+    /// <summary>
+    /// Установить новую директорию для шаблонов
+    /// </summary>
+    void SetTemplatesDirectory(string path);
 }

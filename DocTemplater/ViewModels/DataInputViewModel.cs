@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Reactive;
 using System.Reactive.Concurrency;
+using System.Reactive.Linq;
 using DocTemplater.Domain;
 using DocTemplater.Services;
 using ReactiveUI;
@@ -150,6 +151,11 @@ public class DataInputViewModel : ViewModelBase
     /// Команда выбора пути к выходному файлу
     /// </summary>
     public ReactiveCommand<Unit, Unit> BrowseOutputPathCommand { get; }
+
+    /// <summary>
+    /// Функция для вызова диалога сохранения файла (устанавливается из View)
+    /// </summary>
+    public Func<Task<string?>>? BrowseForSaveFileAsync { get; set; }
 
     /// <summary>
     /// Команда очистки полей
@@ -324,8 +330,18 @@ public class DataInputViewModel : ViewModelBase
 
     private void BrowseOutputDirectory()
     {
-        // TODO: Реализовать диалог выбора папки через Avalonia
-        // Пока используем стандартное расположение
+        // Вызов асинхронного диалога через RxApp.MainThreadScheduler
+        Observable.FromAsync(async () =>
+        {
+            if (BrowseForSaveFileAsync != null)
+            {
+                var result = await BrowseForSaveFileAsync();
+                if (!string.IsNullOrEmpty(result))
+                {
+                    OutputFilePath = result;
+                }
+            }
+        }).Subscribe();
     }
 
     private void ClearFields()

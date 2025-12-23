@@ -73,6 +73,18 @@
                     Spacing="10"
                     Margin="0,20,0,0">
             
+            <Button Content="Изменить директорию..."
+                    Command="{Binding ChangeTemplatesDirectoryCommand}"
+                    IsEnabled="{Binding !IsLoading}"
+                    Padding="20,10"
+                    Name="ChangeDirButton"/>
+            
+            <Button Content="Редактировать" 
+                    Command="{Binding EditTemplateCommand}"
+                    IsEnabled="{Binding !IsLoading}"
+                    Padding="20,10"
+                    Name="EditButton"/>
+            
             <Button Content="Обновить" 
                     Command="{Binding RefreshCommand}"
                     IsEnabled="{Binding !IsLoading}"

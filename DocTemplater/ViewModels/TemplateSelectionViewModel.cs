@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reactive;
 using System.Reactive.Concurrency;
 using DocTemplater.Domain;
@@ -13,6 +14,7 @@ public class TemplateSelectionViewModel : ViewModelBase
 {
     private readonly ITemplateDiscoveryService _templateDiscoveryService;
     private readonly IPlaceholderExtractionService _placeholderExtractionService;
+    private readonly IValuePersistenceService? _valuePersistenceService;
     
     private List<Template> _templates = new();
     private Template? _selectedTemplate;
@@ -21,10 +23,18 @@ public class TemplateSelectionViewModel : ViewModelBase
 
     public TemplateSelectionViewModel(
         ITemplateDiscoveryService templateDiscoveryService,
-        IPlaceholderExtractionService placeholderExtractionService)
+        IPlaceholderExtractionService placeholderExtractionService,
+        IValuePersistenceService? valuePersistenceService = null)
     {
         _templateDiscoveryService = templateDiscoveryService;
         _placeholderExtractionService = placeholderExtractionService;
+        _valuePersistenceService = valuePersistenceService;
+
+        // Подписаться на изменения в директории шаблонов
+        if (_templateDiscoveryService is TemplateDiscoveryService tds)
+        {
+            tds.TemplatesChanged += OnTemplatesChanged;
+        }
 
         // Команды с явным указанием планировщика для UI-потока
         LoadTemplatesCommand = ReactiveCommand.CreateFromTask(
@@ -37,6 +47,10 @@ public class TemplateSelectionViewModel : ViewModelBase
         RefreshCommand = ReactiveCommand.CreateFromTask(
             RefreshTemplatesAsync,
             outputScheduler: RxApp.MainThreadScheduler);
+        EditTemplateCommand = ReactiveCommand.Create(
+            EditTemplate,
+            this.WhenAnyValue(x => x.SelectedTemplate, (Template? template) => template != null));
+        ChangeTemplatesDirectoryCommand = ReactiveCommand.Create(() => { });
 
         // Автоматическая загрузка при создании
         LoadTemplatesCommand.Execute().Subscribe();
@@ -92,6 +106,21 @@ public class TemplateSelectionViewModel : ViewModelBase
     /// Команда обновления списка
     /// </summary>
     public ReactiveCommand<Unit, Unit> RefreshCommand { get; }
+
+    /// <summary>
+    /// Команда редактирования шаблона
+    /// </summary>
+    public ReactiveCommand<Unit, Unit> EditTemplateCommand { get; }
+
+    /// <summary>
+    /// Команда изменения директории шаблонов
+    /// </summary>
+    public ReactiveCommand<Unit, Unit> ChangeTemplatesDirectoryCommand { get; }
+
+    /// <summary>
+    /// Функция для выбора директории (устанавливается из View)
+    /// </summary>
+    public Func<Task<string?>>? BrowseForFolderAsync { get; set; }
 
     /// <summary>
     /// Событие навигации к форме ввода данных
@@ -153,6 +182,74 @@ public class TemplateSelectionViewModel : ViewModelBase
         finally
         {
             IsLoading = false;
+        }
+    }
+
+    private void EditTemplate()
+    {
+        if (SelectedTemplate == null)
+            return;
+
+        try
+        {
+            // Открыть шаблон с помощью системного приложения по умолчанию
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = SelectedTemplate.FilePath,
+                UseShellExecute = true
+            });
+            StatusMessage = $"Открыт шаблон: {SelectedTemplate.FileName}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Ошибка при открытии шаблона: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Обработчик изменений в директории шаблонов
+    /// </summary>
+    private void OnTemplatesChanged(object? sender, EventArgs e)
+    {
+        // Обновить список шаблонов в UI-потоке
+        RxApp.MainThreadScheduler.Schedule(async () =>
+        {
+            // Добавить небольшую задержку, чтобы избежать множественных обновлений
+            await Task.Delay(500);
+            await LoadTemplatesAsync();
+        });
+    }
+
+    /// <summary>
+    /// Обработчик команды изменения директории
+    /// </summary>
+    public async Task ChangeTemplatesDirectoryAsync()
+    {
+        if (BrowseForFolderAsync == null)
+            return;
+
+        var selectedPath = await BrowseForFolderAsync();
+        if (string.IsNullOrEmpty(selectedPath))
+            return;
+
+        try
+        {
+            // Установить новую директорию
+            _templateDiscoveryService.SetTemplatesDirectory(selectedPath);
+            
+            // Сохранить в настройки
+            if (_valuePersistenceService != null)
+            {
+                var settings = await _valuePersistenceService.LoadSettingsAsync();
+                settings.TemplatesFolderPath = selectedPath;
+                await _valuePersistenceService.SaveSettingsAsync(settings);
+            }
+            
+            StatusMessage = $"Директория шаблонов изменена: {selectedPath}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Ошибка при изменении директории: {ex.Message}";
         }
     }
 }
