@@ -25,5 +25,8 @@ public interface IValuePersistenceService
     /// <summary>
     /// Сохранить значения для шаблона
     /// </summary>
-    Task SaveTemplateValuesAsync(string templateFileName, Dictionary<string, object> values);
+    /// <param name="templateFileName">Имя файла шаблона</param>
+    /// <param name="values">Значения полей</param>
+    /// <param name="lastSaveDirectory">Последний каталог сохранения</param>
+    Task SaveTemplateValuesAsync(string templateFileName, Dictionary<string, object> values, string? lastSaveDirectory = null);
 }

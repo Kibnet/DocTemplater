@@ -38,10 +38,11 @@ public partial class DataInputView : UserControl
         var viewModel = DataContext as DataInputViewModel;
         var suggestedFileName = viewModel?.OutputFileName ?? "document";
         
-        // Попытаться получить стартовую директорию
-        var suggestedDirectory = string.IsNullOrEmpty(startingDirectory) || !Directory.Exists(startingDirectory)
+        // Попытаться получить стартовую директорию из текущего OutputDirectory
+        var directoryToUse = viewModel?.OutputDirectory ?? startingDirectory;
+        var suggestedDirectory = string.IsNullOrEmpty(directoryToUse) || !Directory.Exists(directoryToUse)
             ? null
-            : await topLevel.StorageProvider.TryGetFolderFromPathAsync(startingDirectory);
+            : await topLevel.StorageProvider.TryGetFolderFromPathAsync(directoryToUse);
 
         var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {

@@ -117,4 +117,61 @@ public class ValuePersistenceServiceTests : IDisposable
         Assert.NotNull(result);
         Assert.Empty(result.FieldValues);
     }
+
+    [Fact]
+    public async Task SaveTemplateValuesAsync_WithLastSaveDirectory_SavesDirectory()
+    {
+        // Arrange
+        var templateName = "test_template.docx";
+        var values = new Dictionary<string, object>
+        {
+            { "Имя", "Иван" }
+        };
+        var lastSaveDirectory = @"C:\Temp\SavedDocs";
+
+        // Act
+        await _service.SaveTemplateValuesAsync(templateName, values, lastSaveDirectory);
+        var result = await _service.GetSavedValuesAsync(templateName);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(lastSaveDirectory, result.LastSaveDirectory);
+    }
+
+    [Fact]
+    public async Task SaveTemplateValuesAsync_UpdatesLastSaveDirectory()
+    {
+        // Arrange
+        var templateName = "test_template.docx";
+        var values = new Dictionary<string, object> { { "Поле", "Значение" } };
+        var firstDirectory = @"C:\Temp\First";
+        var secondDirectory = @"C:\Temp\Second";
+
+        // Act
+        await _service.SaveTemplateValuesAsync(templateName, values, firstDirectory);
+        await _service.SaveTemplateValuesAsync(templateName, values, secondDirectory);
+        var result = await _service.GetSavedValuesAsync(templateName);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(secondDirectory, result.LastSaveDirectory);
+    }
+
+    [Fact]
+    public async Task SaveTemplateValuesAsync_WithNullDirectory_DoesNotOverwriteExisting()
+    {
+        // Arrange
+        var templateName = "test_template.docx";
+        var values = new Dictionary<string, object> { { "Поле", "Значение" } };
+        var existingDirectory = @"C:\Temp\Existing";
+
+        // Act
+        await _service.SaveTemplateValuesAsync(templateName, values, existingDirectory);
+        await _service.SaveTemplateValuesAsync(templateName, values, null);
+        var result = await _service.GetSavedValuesAsync(templateName);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(existingDirectory, result.LastSaveDirectory);
+    }
 }

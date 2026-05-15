@@ -107,7 +107,7 @@ public class ValuePersistenceService : IValuePersistenceService
     /// <summary>
     /// Сохранить значения для шаблона
     /// </summary>
-    public async Task SaveTemplateValuesAsync(string templateFileName, Dictionary<string, object> values)
+    public async Task SaveTemplateValuesAsync(string templateFileName, Dictionary<string, object> values, string? lastSaveDirectory = null)
     {
         try
         {
@@ -120,6 +120,10 @@ public class ValuePersistenceService : IValuePersistenceService
             {
                 existingData.FieldValues = values;
                 existingData.LastUsed = DateTimeOffset.Now;
+                if (lastSaveDirectory != null)
+                {
+                    existingData.LastSaveDirectory = lastSaveDirectory;
+                }
             }
             else
             {
@@ -127,7 +131,8 @@ public class ValuePersistenceService : IValuePersistenceService
                 {
                     TemplateFileName = templateFileName,
                     FieldValues = values,
-                    LastUsed = DateTimeOffset.Now
+                    LastUsed = DateTimeOffset.Now,
+                    LastSaveDirectory = lastSaveDirectory
                 });
             }
 

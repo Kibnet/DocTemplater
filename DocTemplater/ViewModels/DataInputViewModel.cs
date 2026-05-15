@@ -213,6 +213,12 @@ public class DataInputViewModel : ViewModelBase
             // Получить сохраненные значения
             var savedData = await _valuePersistenceService.GetSavedValuesAsync(_template.FileName + ".docx");
 
+            // Загрузить последний каталог сохранения, если он существует
+            if (savedData?.LastSaveDirectory != null && Directory.Exists(savedData.LastSaveDirectory))
+            {
+                OutputDirectory = savedData.LastSaveDirectory;
+            }
+
             // Создать поля для каждого плейсхолдера
             var fields = new List<PlaceholderFieldViewModel>();
             
@@ -341,7 +347,8 @@ public class DataInputViewModel : ViewModelBase
 
             await _valuePersistenceService.SaveTemplateValuesAsync(
                 _template.FileName + ".docx",
-                fieldValues);
+                fieldValues,
+                OutputDirectory);
 
             StatusMessage = $"Документ успешно сохранен: {outputPath}";
 

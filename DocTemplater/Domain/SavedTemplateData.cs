@@ -9,7 +9,7 @@ public class SavedTemplateData
     /// Имя связанного файла шаблона
     /// </summary>
     public string TemplateFileName { get; set; } = string.Empty;
-    
+
     /// <summary>
     /// Сопоставление имени плейсхолдера и значения
     /// </summary>
@@ -19,4 +19,9 @@ public class SavedTemplateData
     /// Время последнего заполнения этого шаблона
     /// </summary>
     public DateTimeOffset LastUsed { get; set; }
+
+    /// <summary>
+    /// Последний каталог сохранения файла для этого шаблона
+    /// </summary>
+    public string? LastSaveDirectory { get; set; }
 }
