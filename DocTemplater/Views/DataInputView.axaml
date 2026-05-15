@@ -64,10 +64,27 @@
                                                    Name="IntegerValueUpDown"/>
                                     
                                     <!-- Поле ввода даты (DatePicker для DateTimeOffset) -->
-                                    <DatePicker Grid.Row="1" Grid.Column="0" 
-                                                SelectedDate="{Binding DateValue, Mode=TwoWay}"
+                                    <StackPanel Grid.Row="1"
+                                                Grid.Column="0"
+                                                Orientation="Horizontal"
+                                                Spacing="6"
                                                 IsVisible="{Binding IsDateTimeType}"
-                                                Name="DateValuePicker"/>
+                                                Name="DateQuickButtonsPanel">
+                                        <DatePicker SelectedDate="{Binding DateValue, Mode=TwoWay}"
+                                                    Name="DateValuePicker"/>
+                                        <Button Content="+1 день"
+                                                Command="{Binding AddDayCommand}"
+                                                Padding="8,4"
+                                                Name="AddDayButton"/>
+                                        <Button Content="+1 месяц"
+                                                Command="{Binding AddMonthCommand}"
+                                                Padding="8,4"
+                                                Name="AddMonthButton"/>
+                                        <Button Content="+1 год"
+                                                Command="{Binding AddYearCommand}"
+                                                Padding="8,4"
+                                                Name="AddYearButton"/>
+                                    </StackPanel>
                                     
                                     <!-- Превью -->
                                     

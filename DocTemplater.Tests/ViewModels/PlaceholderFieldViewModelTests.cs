@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Reactive.Linq;
 using DocTemplater.Domain;
 using DocTemplater.ViewModels;
 using Xunit;
@@ -141,5 +142,81 @@ public class PlaceholderFieldViewModelTests
 
         // Assert
         Assert.Contains("Новое значение", viewModel.Preview);
+    }
+
+    [Fact]
+    public void AddDayCommand_AddsOneDayToDateValue()
+    {
+        var viewModel = CreateDateViewModel();
+        var initialValue = new DateTimeOffset(2026, 5, 15, 0, 0, 0, TimeSpan.FromHours(3));
+
+        viewModel.DateValue = initialValue;
+        viewModel.AddDayCommand.Execute().Subscribe();
+
+        Assert.Equal(initialValue.AddDays(1), viewModel.DateValue);
+    }
+
+    [Fact]
+    public void AddMonthCommand_UsesFrameworkMonthArithmetic()
+    {
+        var viewModel = CreateDateViewModel();
+        var initialValue = new DateTimeOffset(2026, 1, 31, 0, 0, 0, TimeSpan.FromHours(3));
+
+        viewModel.DateValue = initialValue;
+        viewModel.AddMonthCommand.Execute().Subscribe();
+
+        Assert.Equal(initialValue.AddMonths(1), viewModel.DateValue);
+    }
+
+    [Fact]
+    public void AddYearCommand_UsesFrameworkYearArithmetic()
+    {
+        var viewModel = CreateDateViewModel();
+        var initialValue = new DateTimeOffset(2024, 2, 29, 0, 0, 0, TimeSpan.FromHours(3));
+
+        viewModel.DateValue = initialValue;
+        viewModel.AddYearCommand.Execute().Subscribe();
+
+        Assert.Equal(initialValue.AddYears(1), viewModel.DateValue);
+    }
+
+    [Fact]
+    public void AddDayCommand_WhenDateValueIsEmpty_UsesCurrentLocalDate()
+    {
+        var viewModel = CreateDateViewModel();
+        var startDate = DateTimeOffset.Now.Date;
+
+        viewModel.AddDayCommand.Execute().Subscribe();
+
+        var endDate = DateTimeOffset.Now.Date;
+        Assert.NotNull(viewModel.DateValue);
+        Assert.True(
+            viewModel.DateValue.Value.Date == startDate.AddDays(1).Date ||
+            viewModel.DateValue.Value.Date == endDate.AddDays(1).Date);
+    }
+
+    [Fact]
+    public void AddDayCommand_UpdatesPreview()
+    {
+        var viewModel = CreateDateViewModel("d.MM.yyyy");
+
+        viewModel.DateValue = new DateTimeOffset(2026, 5, 15, 0, 0, 0, TimeSpan.FromHours(3));
+        viewModel.AddDayCommand.Execute().Subscribe();
+
+        Assert.Contains("16.05.2026", viewModel.Preview);
+    }
+
+    private static PlaceholderFieldViewModel CreateDateViewModel(params string[] formats)
+    {
+        var placeholder = new Placeholder
+        {
+            Name = "Дата",
+            DataType = PlaceholderDataType.DateTimeOffset,
+            FormatPatterns = new List<string>(formats)
+        };
+
+        return new PlaceholderFieldViewModel(
+            placeholder,
+            CultureInfo.GetCultureInfo("ru-RU"));
     }
 }

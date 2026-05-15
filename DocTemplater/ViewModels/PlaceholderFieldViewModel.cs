@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Reactive;
 using DocTemplater.Domain;
 using ReactiveUI;
 
@@ -30,6 +31,10 @@ public class PlaceholderFieldViewModel : ViewModelBase
         // Подписаться на изменения значения для обновления превью
         this.WhenAnyValue(x => x.Value)
             .Subscribe(_ => UpdatePreview());
+
+        AddDayCommand = ReactiveCommand.Create(() => AddToDate(date => date.AddDays(1)));
+        AddMonthCommand = ReactiveCommand.Create(() => AddToDate(date => date.AddMonths(1)));
+        AddYearCommand = ReactiveCommand.Create(() => AddToDate(date => date.AddYears(1)));
     }
 
     /// <summary>
@@ -46,6 +51,9 @@ public class PlaceholderFieldViewModel : ViewModelBase
         set
         {
             this.RaiseAndSetIfChanged(ref _value, value);
+            this.RaisePropertyChanged(nameof(ValueText));
+            this.RaisePropertyChanged(nameof(IntegerValue));
+            this.RaisePropertyChanged(nameof(DateValue));
             Validate();
         }
     }
@@ -56,7 +64,11 @@ public class PlaceholderFieldViewModel : ViewModelBase
     public List<string> PreviewTexts
     {
         get => _previewTexts;
-        set => this.RaiseAndSetIfChanged(ref _previewTexts, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _previewTexts, value);
+            this.RaisePropertyChanged(nameof(Preview));
+        }
     }
 
     /// <summary>
@@ -138,9 +150,35 @@ public class PlaceholderFieldViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Добавить один день к дате
+    /// </summary>
+    public ReactiveCommand<Unit, Unit> AddDayCommand { get; }
+
+    /// <summary>
+    /// Добавить один месяц к дате
+    /// </summary>
+    public ReactiveCommand<Unit, Unit> AddMonthCommand { get; }
+
+    /// <summary>
+    /// Добавить один год к дате
+    /// </summary>
+    public ReactiveCommand<Unit, Unit> AddYearCommand { get; }
+
+    /// <summary>
     /// Превью форматированного значения (объединенные строки)
     /// </summary>
     public string Preview => string.Join("\n", PreviewTexts);
+
+    private void AddToDate(Func<DateTimeOffset, DateTimeOffset> increment)
+    {
+        if (!IsDateTimeType)
+        {
+            return;
+        }
+
+        var baseDate = DateValue ?? DateTimeOffset.Now.Date;
+        DateValue = increment(baseDate);
+    }
 
     /// <summary>
     /// Обновить превью форматированных значений
