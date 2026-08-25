@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Reactive;
 using System.Reactive.Concurrency;
+using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using DocTemplater.Domain;
 using DocTemplater.Services;
@@ -19,10 +20,15 @@ public class DataInputViewModel : ViewModelBase
     private readonly IValuePersistenceService _valuePersistenceService;
     private readonly CultureInfo _culture;
     private readonly string _templateDirectory;
+    private readonly CompositeDisposable _fieldSubscriptions = new();
     
     private List<PlaceholderFieldViewModel> _fields = new();
     private string _outputDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
     private string _outputFileName = string.Empty;
+    private string _outputFileNameTemplate = string.Empty;
+    private int _outputFileNameTemplateCaretIndex = -1;
+    private int _outputFileNameTemplateSelectionStart = -1;
+    private int _outputFileNameTemplateSelectionEnd = -1;
     private bool _openAfterSave = false;
     private bool _isSaving;
     private string _statusMessage = string.Empty;
@@ -42,7 +48,7 @@ public class DataInputViewModel : ViewModelBase
         _templateDirectory = Path.GetDirectoryName(template.FilePath) ?? string.Empty;
 
         // Установить имя выходного файла по умолчанию
-        OutputFileName = $"{template.FileName}_заполненный";
+        OutputFileNameTemplate = $"{template.FileName}_заполненный";
         
         // Установить директорию вывода в ту же папку, где шаблон
         if (!string.IsNullOrEmpty(_templateDirectory))
@@ -72,7 +78,26 @@ public class DataInputViewModel : ViewModelBase
     public List<PlaceholderFieldViewModel> Fields
     {
         get => _fields;
-        set => this.RaiseAndSetIfChanged(ref _fields, value);
+        set
+        {
+            foreach (var field in _fields)
+            {
+                field.SetInsertPlaceholderTokenHandler(null);
+            }
+
+            _fieldSubscriptions.Clear();
+            this.RaiseAndSetIfChanged(ref _fields, value ?? new List<PlaceholderFieldViewModel>());
+
+            foreach (var field in _fields)
+            {
+                field.SetInsertPlaceholderTokenHandler(InsertPlaceholderToken);
+                _fieldSubscriptions.Add(field.WhenAnyValue(x => x.Value)
+                    .Skip(1)
+                    .Subscribe(_ => UpdateOutputFileName()));
+            }
+
+            UpdateOutputFileName();
+        }
     }
 
     /// <summary>
@@ -99,14 +124,23 @@ public class DataInputViewModel : ViewModelBase
     public string OutputFileName
     {
         get => _outputFileName;
+        set => OutputFileNameTemplate = value;
+    }
+
+    /// <summary>
+    /// Шаблон имени выходного файла
+    /// </summary>
+    public string OutputFileNameTemplate
+    {
+        get => _outputFileNameTemplate;
         set
         {
-            var oldValue = _outputFileName;
-            this.RaiseAndSetIfChanged(ref _outputFileName, value);
-            if (oldValue != value)
+            var newValue = value ?? string.Empty;
+            var oldValue = _outputFileNameTemplate;
+            this.RaiseAndSetIfChanged(ref _outputFileNameTemplate, newValue);
+            if (oldValue != newValue)
             {
-                // Обновить OutputFilePath при изменении имени
-                this.RaisePropertyChanged(nameof(OutputFilePath));
+                UpdateOutputFileName();
             }
         }
     }
@@ -159,7 +193,7 @@ public class DataInputViewModel : ViewModelBase
             }
             if (!string.IsNullOrEmpty(fileName))
             {
-                OutputFileName = fileName;
+                OutputFileNameTemplate = fileName;
             }
             // Явно уведомить об изменении
             this.RaisePropertyChanged(nameof(OutputFilePath));
@@ -206,6 +240,42 @@ public class DataInputViewModel : ViewModelBase
     /// </summary>
     public event EventHandler? DocumentSaved;
 
+    public event Action<int>? OutputFileNameTemplateFocusRequested;
+
+    public void UpdateOutputFileNameTemplateSelection(int caretIndex, int selectionStart, int selectionEnd)
+    {
+        _outputFileNameTemplateCaretIndex = caretIndex;
+        _outputFileNameTemplateSelectionStart = selectionStart;
+        _outputFileNameTemplateSelectionEnd = selectionEnd;
+    }
+
+    public void InsertPlaceholderToken(PlaceholderFieldViewModel field)
+    {
+        InsertPlaceholderToken(field.PlaceholderToken);
+    }
+
+    public void InsertPlaceholderToken(string token)
+    {
+        var template = OutputFileNameTemplate;
+        var length = template.Length;
+        var hasSelection = _outputFileNameTemplateSelectionStart >= 0 &&
+                           _outputFileNameTemplateSelectionEnd >= 0 &&
+                           _outputFileNameTemplateSelectionStart != _outputFileNameTemplateSelectionEnd;
+
+        var start = hasSelection
+            ? Math.Clamp(Math.Min(_outputFileNameTemplateSelectionStart, _outputFileNameTemplateSelectionEnd), 0, length)
+            : Math.Clamp(_outputFileNameTemplateCaretIndex < 0 ? length : _outputFileNameTemplateCaretIndex, 0, length);
+        var end = hasSelection
+            ? Math.Clamp(Math.Max(_outputFileNameTemplateSelectionStart, _outputFileNameTemplateSelectionEnd), 0, length)
+            : start;
+
+        OutputFileNameTemplate = template.Remove(start, end - start).Insert(start, token);
+
+        var caretIndex = start + token.Length;
+        UpdateOutputFileNameTemplateSelection(caretIndex, caretIndex, caretIndex);
+        OutputFileNameTemplateFocusRequested?.Invoke(caretIndex);
+    }
+
     private async Task LoadSavedValuesAsync()
     {
         try
@@ -217,6 +287,11 @@ public class DataInputViewModel : ViewModelBase
             if (savedData?.LastSaveDirectory != null && Directory.Exists(savedData.LastSaveDirectory))
             {
                 OutputDirectory = savedData.LastSaveDirectory;
+            }
+
+            if (!string.IsNullOrWhiteSpace(savedData?.OutputFileNameTemplate))
+            {
+                OutputFileNameTemplate = savedData.OutputFileNameTemplate;
             }
 
             // Создать поля для каждого плейсхолдера
@@ -272,6 +347,84 @@ public class DataInputViewModel : ViewModelBase
         {
             return null;
         }
+    }
+
+    private void UpdateOutputFileName()
+    {
+        var outputFileName = RenderOutputFileNameTemplate();
+        if (_outputFileName != outputFileName)
+        {
+            this.RaiseAndSetIfChanged(ref _outputFileName, outputFileName, nameof(OutputFileName));
+            this.RaisePropertyChanged(nameof(OutputFilePath));
+        }
+    }
+
+    private string RenderOutputFileNameTemplate()
+    {
+        var outputFileName = OutputFileNameTemplate;
+
+        foreach (var field in Fields)
+        {
+            outputFileName = outputFileName.Replace(
+                field.PlaceholderToken,
+                FormatFieldValueForFileName(field),
+                StringComparison.Ordinal);
+        }
+
+        outputFileName = SanitizeFileName(outputFileName).Trim();
+        return RemoveTrailingDocxExtension(outputFileName).Trim();
+    }
+
+    private string FormatFieldValueForFileName(PlaceholderFieldViewModel field)
+    {
+        if (field.Value == null || !field.IsValid)
+        {
+            return string.Empty;
+        }
+
+        var format = field.Placeholder.FormatPatterns
+            .Where(pattern => !string.IsNullOrEmpty(pattern))
+            .OrderBy(pattern => pattern, StringComparer.Ordinal)
+            .FirstOrDefault();
+
+        try
+        {
+            return field.Value switch
+            {
+                DateTimeOffset dto => string.IsNullOrEmpty(format)
+                    ? dto.ToString(_culture)
+                    : dto.ToString(format, _culture),
+                DateTime dt => string.IsNullOrEmpty(format)
+                    ? dt.ToString(_culture)
+                    : dt.ToString(format, _culture),
+                int i => string.IsNullOrEmpty(format)
+                    ? i.ToString(_culture)
+                    : i.ToString(format, _culture),
+                IFormattable formattable => formattable.ToString(format, _culture),
+                string s => s,
+                _ => field.Value.ToString() ?? string.Empty
+            };
+        }
+        catch
+        {
+            return field.Value.ToString() ?? string.Empty;
+        }
+    }
+
+    private static string SanitizeFileName(string fileName)
+    {
+        var invalidCharacters = Path.GetInvalidFileNameChars();
+        var sanitizedCharacters = fileName.Select(character =>
+            invalidCharacters.Contains(character) ? '_' : character);
+        return new string(sanitizedCharacters.ToArray());
+    }
+
+    private static string RemoveTrailingDocxExtension(string fileName)
+    {
+        const string extension = ".docx";
+        return fileName.EndsWith(extension, StringComparison.OrdinalIgnoreCase)
+            ? fileName[..^extension.Length]
+            : fileName;
     }
 
     private async Task SaveDocumentAsync()
@@ -348,7 +501,8 @@ public class DataInputViewModel : ViewModelBase
             await _valuePersistenceService.SaveTemplateValuesAsync(
                 _template.FileName + ".docx",
                 fieldValues,
-                OutputDirectory);
+                OutputDirectory,
+                OutputFileNameTemplate);
 
             StatusMessage = $"Документ успешно сохранен: {outputPath}";
 

@@ -91,6 +91,106 @@ public class DataInputViewTests
         }
     }
 
+    [AvaloniaFact]
+    public async Task PlaceholderFields_ShowInsertTokenButtonsForAllEditors()
+    {
+        var dateField = CreateField("Дата", PlaceholderDataType.DateTimeOffset);
+        var textField = CreateField("Имя", PlaceholderDataType.String);
+        var integerField = CreateField("Возраст", PlaceholderDataType.Integer);
+        Window? window = null;
+
+        try
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var view = CreateView(dateField, textField, integerField);
+                window = ShowInWindow(view);
+
+                Assert.Single(FindInsertTokenButtons(view, dateField));
+                Assert.Single(FindInsertTokenButtons(view, textField));
+                Assert.Single(FindInsertTokenButtons(view, integerField));
+            });
+        }
+        finally
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => window?.Close());
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task InsertPlaceholderTokenButton_ClickInsertsTokenAtTemplateCaret()
+    {
+        var textField = CreateField("Имя", PlaceholderDataType.String);
+        Window? window = null;
+
+        try
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var view = CreateView(textField);
+                var viewModel = Assert.IsType<DataInputViewModel>(view.DataContext);
+                viewModel.OutputFileNameTemplate = "StartEnd";
+                window = ShowInWindow(view);
+
+                var templateTextBox = FindNamedControl<TextBox>(view, "OutputFileNameTemplateTextBox");
+                templateTextBox.Focus();
+                templateTextBox.CaretIndex = 5;
+                templateTextBox.SelectionStart = 5;
+                templateTextBox.SelectionEnd = 5;
+                Dispatcher.UIThread.RunJobs();
+
+                var insertButton = FindInsertTokenButtons(view, textField).Single();
+                Assert.NotNull(insertButton.Command);
+
+                insertButton.Command.Execute(insertButton.CommandParameter);
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.Equal("Start{Имя}End", viewModel.OutputFileNameTemplate);
+                Assert.Equal("Start{Имя}End", templateTextBox.Text);
+                Assert.Equal("Start{Имя}".Length, templateTextBox.CaretIndex);
+            });
+        }
+        finally
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => window?.Close());
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task SaveSettingsPanel_ControlsRemainVisibleAtSupportedWidths()
+    {
+        foreach (var width in new[] { 800d, 900d })
+        {
+            Window? window = null;
+
+            try
+            {
+                await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    var view = CreateView(CreateField("Имя", PlaceholderDataType.String));
+                    window = ShowInWindow(view, width, 600);
+
+                    var saveSettingsPanel = FindNamedControl<StackPanel>(view, "SaveSettingsPanel");
+                    var templateTextBox = FindNamedControl<TextBox>(view, "OutputFileNameTemplateTextBox");
+                    var outputPathTextBox = FindNamedControl<TextBox>(view, "OutputFilePathTextBox");
+                    var browseButton = FindNamedControl<Button>(view, "BrowseOutputPathButton");
+
+                    Assert.True(saveSettingsPanel.IsVisible);
+                    Assert.True(templateTextBox.IsVisible);
+                    Assert.True(outputPathTextBox.IsVisible);
+                    Assert.True(browseButton.IsVisible);
+                    Assert.True(templateTextBox.Bounds.Width >= 200);
+                    Assert.True(outputPathTextBox.Bounds.Width >= 200);
+                    Assert.True(browseButton.Bounds.Width > 0);
+                });
+            }
+            finally
+            {
+                await Dispatcher.UIThread.InvokeAsync(() => window?.Close());
+            }
+        }
+    }
+
     private static DataInputView CreateView(params PlaceholderFieldViewModel[] fields)
     {
         var viewModel = new DataInputViewModel(
@@ -111,18 +211,18 @@ public class DataInputViewTests
         };
     }
 
-    private static Window ShowInWindow(DataInputView view)
+    private static Window ShowInWindow(DataInputView view, double width = 900, double height = 600)
     {
         var window = new Window
         {
             Content = view,
-            Width = 900,
-            Height = 600
+            Width = width,
+            Height = height
         };
 
         window.Show();
-        view.Measure(new Size(900, 600));
-        view.Arrange(new Rect(0, 0, 900, 600));
+        view.Measure(new Size(width, height));
+        view.Arrange(new Rect(0, 0, width, height));
         Dispatcher.UIThread.RunJobs();
 
         return window;
@@ -135,6 +235,23 @@ public class DataInputViewTests
             .Where(button => ReferenceEquals(button.DataContext, field) &&
                              button.Name is "AddDayButton" or "AddMonthButton" or "AddYearButton")
             .ToList();
+    }
+
+    private static List<Button> FindInsertTokenButtons(DataInputView view, PlaceholderFieldViewModel field)
+    {
+        return view.GetVisualDescendants()
+            .OfType<Button>()
+            .Where(button => ReferenceEquals(button.DataContext, field) &&
+                             button.Name == "InsertPlaceholderTokenButton")
+            .ToList();
+    }
+
+    private static T FindNamedControl<T>(DataInputView view, string name)
+        where T : Control
+    {
+        return view.GetVisualDescendants()
+            .OfType<T>()
+            .Single(control => control.Name == name);
     }
 
     private static PlaceholderFieldViewModel CreateField(string name, PlaceholderDataType dataType)
@@ -183,7 +300,8 @@ public class DataInputViewTests
         public Task SaveTemplateValuesAsync(
             string templateFileName,
             Dictionary<string, object> values,
-            string? lastSaveDirectory = null)
+            string? lastSaveDirectory = null,
+            string? outputFileNameTemplate = null)
         {
             return Task.CompletedTask;
         }

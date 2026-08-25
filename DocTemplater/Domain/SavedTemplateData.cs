@@ -24,4 +24,9 @@ public class SavedTemplateData
     /// Последний каталог сохранения файла для этого шаблона
     /// </summary>
     public string? LastSaveDirectory { get; set; }
+
+    /// <summary>
+    /// Последний шаблон имени выходного файла для этого шаблона
+    /// </summary>
+    public string? OutputFileNameTemplate { get; set; }
 }

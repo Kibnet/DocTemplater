@@ -174,4 +174,80 @@ public class ValuePersistenceServiceTests : IDisposable
         Assert.NotNull(result);
         Assert.Equal(existingDirectory, result.LastSaveDirectory);
     }
+
+    [Fact]
+    public async Task SaveTemplateValuesAsync_WithOutputFileNameTemplate_SavesTemplate()
+    {
+        // Arrange
+        var templateName = "test_template.docx";
+        var values = new Dictionary<string, object> { { "Поле", "Значение" } };
+        var outputFileNameTemplate = "Акт_{Дата}_{Имя}";
+
+        // Act
+        await _service.SaveTemplateValuesAsync(
+            templateName,
+            values,
+            lastSaveDirectory: null,
+            outputFileNameTemplate: outputFileNameTemplate);
+        var result = await _service.GetSavedValuesAsync(templateName);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(outputFileNameTemplate, result.OutputFileNameTemplate);
+    }
+
+    [Fact]
+    public async Task SaveTemplateValuesAsync_WithNullOutputFileNameTemplate_DoesNotOverwriteExisting()
+    {
+        // Arrange
+        var templateName = "test_template.docx";
+        var values = new Dictionary<string, object> { { "Поле", "Значение" } };
+        var outputFileNameTemplate = "Акт_{Дата}_{Имя}";
+
+        // Act
+        await _service.SaveTemplateValuesAsync(
+            templateName,
+            values,
+            outputFileNameTemplate: outputFileNameTemplate);
+        await _service.SaveTemplateValuesAsync(templateName, values);
+        var result = await _service.GetSavedValuesAsync(templateName);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(outputFileNameTemplate, result.OutputFileNameTemplate);
+    }
+
+    [Fact]
+    public async Task LoadSettingsAsync_WhenLegacySettingsHaveNoOutputFileNameTemplate_LoadsSuccessfully()
+    {
+        // Arrange
+        Directory.CreateDirectory(_testDirectory);
+        var settingsPath = Path.Combine(_testDirectory, "settings.json");
+        await File.WriteAllTextAsync(settingsPath, """
+            {
+              "TemplatesFolderPath": "./Templates",
+              "DefaultOutputPath": "C:\\Temp",
+              "CultureName": "ru-RU",
+              "OpenAfterSaveDefault": false,
+              "Templates": [
+                {
+                  "TemplateFileName": "legacy.docx",
+                  "FieldValues": {
+                    "Поле": "Значение"
+                  },
+                  "LastUsed": "2026-05-15T00:00:00+03:00",
+                  "LastSaveDirectory": "C:\\Temp"
+                }
+              ]
+            }
+            """);
+
+        // Act
+        var result = await _service.GetSavedValuesAsync("legacy.docx");
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Null(result.OutputFileNameTemplate);
+        Assert.Equal("Значение", result.FieldValues["Поле"].ToString());
+    }
 }

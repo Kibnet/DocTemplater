@@ -36,7 +36,7 @@
                                     CornerRadius="4"
                                     Padding="5"
                                     Margin="0,0,0,0">
-                                <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,*">
+                                <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,Auto,*">
                                     
                                     <!-- Название плейсхолдера -->
                                     <TextBlock Grid.Row="0" Grid.Column="0"
@@ -50,6 +50,7 @@
                                              Text="{Binding ValueText, Mode=TwoWay}"
                                              Watermark="{Binding Placeholder}"
                                              IsVisible="{Binding IsStringType}"
+                                             MinWidth="180"
                                              Name="ValueTextBox"/>
                                     
                                     <!-- Поле ввода числа (NumericUpDown для Integer) -->
@@ -61,6 +62,7 @@
                                                    Maximum="999999"
                                                    Increment="1"
                                                    FormatString="N0"
+                                                   MinWidth="120"
                                                    Name="IntegerValueUpDown"/>
                                     
                                     <!-- Поле ввода даты (DatePicker для DateTimeOffset) -->
@@ -85,11 +87,20 @@
                                                 Padding="8,4"
                                                 Name="AddYearButton"/>
                                     </StackPanel>
+
+                                    <Button Grid.Row="1"
+                                            Grid.Column="1"
+                                            Content="{Binding PlaceholderToken}"
+                                            Command="{Binding InsertPlaceholderTokenCommand}"
+                                            Padding="8,4"
+                                            Margin="6,0"
+                                            VerticalAlignment="Center"
+                                            Name="InsertPlaceholderTokenButton"/>
                                     
                                     <!-- Превью -->
                                     
                                     <Border Grid.Row="1" 
-                                            Grid.Column="1"
+                                            Grid.Column="2"
                                             BorderThickness="1"
                                             CornerRadius="4"
                                             Padding="5"
@@ -101,7 +112,7 @@
                                     
                                     <!-- Ошибка валидации -->
                                     <TextBlock Grid.Row="2" 
-                                               Grid.ColumnSpan="2"
+                                               Grid.ColumnSpan="3"
                                                Text="{Binding ValidationError}"
                                                Foreground="Red"
                                                FontSize="12"
@@ -129,18 +140,36 @@
             
             <!-- Настройки сохранения в центре -->
             <StackPanel Grid.Column="1" 
-                        Orientation="Horizontal"
-                        HorizontalAlignment="Center"
-                        Spacing="10">
-                <TextBlock Text="Выходной файл:"
-                           VerticalAlignment="Center"
-                           Margin="0,0,10,0"/>
-                <TextBox Text="{Binding OutputFilePath, Mode=TwoWay}"
-                         Width="300"
-                         Name="OutputFilePathTextBox"/>
-                <Button Content="Обзор..."
-                        Command="{Binding BrowseOutputPathCommand}"
-                        Padding="15,8"/>
+                        Name="SaveSettingsPanel"
+                        HorizontalAlignment="Stretch"
+                        Margin="12,0"
+                        Spacing="6">
+                <Grid ColumnDefinitions="Auto,*">
+                    <TextBlock Text="Имя файла:"
+                               Grid.Column="0"
+                               VerticalAlignment="Center"
+                               Margin="0,0,10,0"/>
+                    <TextBox Text="{Binding OutputFileNameTemplate, Mode=TwoWay}"
+                             Grid.Column="1"
+                             MinWidth="260"
+                             Name="OutputFileNameTemplateTextBox"/>
+                </Grid>
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <TextBlock Text="Выходной файл:"
+                               Grid.Column="0"
+                               VerticalAlignment="Center"
+                               Margin="0,0,10,0"/>
+                    <TextBox Text="{Binding OutputFilePath, Mode=TwoWay}"
+                             Grid.Column="1"
+                             MinWidth="260"
+                             Name="OutputFilePathTextBox"/>
+                    <Button Content="Обзор..."
+                            Grid.Column="2"
+                            Command="{Binding BrowseOutputPathCommand}"
+                            Padding="15,8"
+                            Margin="10,0,0,0"
+                            Name="BrowseOutputPathButton"/>
+                </Grid>
                 <CheckBox IsChecked="{Binding OpenAfterSave}"
                           Content="Открыть после сохранения"
                           VerticalAlignment="Center"/>

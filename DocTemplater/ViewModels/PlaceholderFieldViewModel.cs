@@ -12,6 +12,7 @@ public class PlaceholderFieldViewModel : ViewModelBase
 {
     private readonly Placeholder _placeholder;
     private readonly CultureInfo _culture;
+    private Action<PlaceholderFieldViewModel>? _insertPlaceholderToken;
     
     private object? _value;
     private List<string> _previewTexts = new();
@@ -35,6 +36,7 @@ public class PlaceholderFieldViewModel : ViewModelBase
         AddDayCommand = ReactiveCommand.Create(() => AddToDate(date => date.AddDays(1)));
         AddMonthCommand = ReactiveCommand.Create(() => AddToDate(date => date.AddMonths(1)));
         AddYearCommand = ReactiveCommand.Create(() => AddToDate(date => date.AddYears(1)));
+        InsertPlaceholderTokenCommand = ReactiveCommand.Create(() => _insertPlaceholderToken?.Invoke(this));
     }
 
     /// <summary>
@@ -89,6 +91,11 @@ public class PlaceholderFieldViewModel : ViewModelBase
     /// Название плейсхолдера для отображения
     /// </summary>
     public string Label => _placeholder.Name;
+
+    /// <summary>
+    /// Токен плейсхолдера для шаблона имени выходного файла
+    /// </summary>
+    public string PlaceholderToken => $"{{{_placeholder.Name}}}";
 
     /// <summary>
     /// Является ли поле датой
@@ -165,9 +172,19 @@ public class PlaceholderFieldViewModel : ViewModelBase
     public ReactiveCommand<Unit, Unit> AddYearCommand { get; }
 
     /// <summary>
+    /// Вставить токен плейсхолдера в шаблон имени выходного файла
+    /// </summary>
+    public ReactiveCommand<Unit, Unit> InsertPlaceholderTokenCommand { get; }
+
+    /// <summary>
     /// Превью форматированного значения (объединенные строки)
     /// </summary>
     public string Preview => string.Join("\n", PreviewTexts);
+
+    public void SetInsertPlaceholderTokenHandler(Action<PlaceholderFieldViewModel>? insertPlaceholderToken)
+    {
+        _insertPlaceholderToken = insertPlaceholderToken;
+    }
 
     private void AddToDate(Func<DateTimeOffset, DateTimeOffset> increment)
     {
