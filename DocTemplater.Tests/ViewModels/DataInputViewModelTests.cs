@@ -239,6 +239,217 @@ public class DataInputViewModelTests
             "Документ_{Имя}"), Times.Once);
     }
 
+    [Fact]
+    public async Task SaveCommand_WhenOutputFileExists_DoesNotGenerateWithoutConfirmation()
+    {
+        var outputDirectory = Path.Combine(Path.GetTempPath(), $"DocTemplaterTests_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(outputDirectory);
+        var outputPath = Path.Combine(outputDirectory, "existing.docx");
+        await File.WriteAllTextAsync(outputPath, "original");
+
+        try
+        {
+            var mockDocGen = new Mock<IDocumentGenerationService>();
+            mockDocGen
+                .Setup(service => service.GenerateDocumentAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<Dictionary<string, PlaceholderValue>>(),
+                    It.IsAny<string>()))
+                .ReturnsAsync(true);
+            var mockValuePersistence = new Mock<IValuePersistenceService>();
+            mockValuePersistence
+                .Setup(service => service.GetSavedValuesAsync(It.IsAny<string>()))
+                .ReturnsAsync((SavedTemplateData?)null);
+
+            var viewModel = new DataInputViewModel(
+                CreateTemplateWithPlaceholders(),
+                mockDocGen.Object,
+                mockValuePersistence.Object);
+            await viewModel.LoadSavedValuesCommand.Execute().ToTask();
+            viewModel.OutputDirectory = outputDirectory;
+            viewModel.OutputFileNameTemplate = "existing";
+
+            await viewModel.SaveCommand.Execute().ToTask();
+
+            mockDocGen.Verify(service => service.GenerateDocumentAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<Dictionary<string, PlaceholderValue>>(),
+                It.IsAny<string>()), Times.Never);
+            Assert.Equal("Сохранение отменено", viewModel.StatusMessage);
+        }
+        finally
+        {
+            Directory.Delete(outputDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task SaveCommand_WhenOverwriteConfirmed_GeneratesUsingConfirmedPath()
+    {
+        var outputDirectory = Path.Combine(Path.GetTempPath(), $"DocTemplaterTests_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(outputDirectory);
+        var outputPath = Path.Combine(outputDirectory, "existing.docx");
+        await File.WriteAllTextAsync(outputPath, "original");
+
+        try
+        {
+            var mockDocGen = new Mock<IDocumentGenerationService>();
+            mockDocGen
+                .Setup(service => service.GenerateDocumentAsync(
+                    It.IsAny<string>(),
+                    outputPath,
+                    It.IsAny<Dictionary<string, PlaceholderValue>>(),
+                    It.IsAny<string>()))
+                .ReturnsAsync(true);
+            var mockValuePersistence = new Mock<IValuePersistenceService>();
+            mockValuePersistence
+                .Setup(service => service.GetSavedValuesAsync(It.IsAny<string>()))
+                .ReturnsAsync((SavedTemplateData?)null);
+            mockValuePersistence
+                .Setup(service => service.SaveTemplateValuesAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Dictionary<string, object>>(),
+                    It.IsAny<string?>(),
+                    It.IsAny<string?>()))
+                .Returns(Task.CompletedTask);
+
+            var viewModel = new DataInputViewModel(
+                CreateTemplateWithPlaceholders(),
+                mockDocGen.Object,
+                mockValuePersistence.Object);
+            await viewModel.LoadSavedValuesCommand.Execute().ToTask();
+            viewModel.OutputDirectory = outputDirectory;
+            viewModel.OutputFileNameTemplate = "existing";
+            string? confirmedPath = null;
+            viewModel.ConfirmFileOverwriteAsync = path =>
+            {
+                confirmedPath = path;
+                return Task.FromResult(true);
+            };
+
+            await viewModel.SaveCommand.Execute().ToTask();
+
+            Assert.Equal(outputPath, confirmedPath);
+            mockDocGen.Verify(service => service.GenerateDocumentAsync(
+                It.IsAny<string>(),
+                outputPath,
+                It.IsAny<Dictionary<string, PlaceholderValue>>(),
+                It.IsAny<string>()), Times.Once);
+        }
+        finally
+        {
+            Directory.Delete(outputDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task SaveCommand_WhenOverwriteDeclined_HasNoSaveSideEffects()
+    {
+        var outputDirectory = Path.Combine(Path.GetTempPath(), $"DocTemplaterTests_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(outputDirectory);
+        var outputPath = Path.Combine(outputDirectory, "existing.docx");
+        await File.WriteAllTextAsync(outputPath, "original");
+
+        try
+        {
+            var mockDocGen = new Mock<IDocumentGenerationService>();
+            var mockValuePersistence = new Mock<IValuePersistenceService>();
+            mockValuePersistence
+                .Setup(service => service.GetSavedValuesAsync(It.IsAny<string>()))
+                .ReturnsAsync((SavedTemplateData?)null);
+
+            var viewModel = new DataInputViewModel(
+                CreateTemplateWithPlaceholders(),
+                mockDocGen.Object,
+                mockValuePersistence.Object)
+            {
+                OutputDirectory = outputDirectory,
+                OutputFileNameTemplate = "existing",
+                ConfirmFileOverwriteAsync = _ => Task.FromResult(false)
+            };
+            await viewModel.LoadSavedValuesCommand.Execute().ToTask();
+            var documentSavedCount = 0;
+            viewModel.DocumentSaved += (_, _) => documentSavedCount++;
+
+            await viewModel.SaveCommand.Execute().ToTask();
+
+            mockDocGen.Verify(service => service.GenerateDocumentAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<Dictionary<string, PlaceholderValue>>(),
+                It.IsAny<string>()), Times.Never);
+            mockValuePersistence.Verify(service => service.SaveTemplateValuesAsync(
+                It.IsAny<string>(),
+                It.IsAny<Dictionary<string, object>>(),
+                It.IsAny<string?>(),
+                It.IsAny<string?>()), Times.Never);
+            Assert.Equal(0, documentSavedCount);
+            Assert.Equal("original", await File.ReadAllTextAsync(outputPath));
+            Assert.Equal("Сохранение отменено", viewModel.StatusMessage);
+            Assert.False(viewModel.IsSaving);
+        }
+        finally
+        {
+            Directory.Delete(outputDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task SaveCommand_WhenOutputFileDoesNotExist_DoesNotRequestConfirmation()
+    {
+        var outputDirectory = Path.Combine(Path.GetTempPath(), $"DocTemplaterTests_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(outputDirectory);
+
+        try
+        {
+            var mockDocGen = new Mock<IDocumentGenerationService>();
+            mockDocGen
+                .Setup(service => service.GenerateDocumentAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<string>(),
+                    It.IsAny<Dictionary<string, PlaceholderValue>>(),
+                    It.IsAny<string>()))
+                .ReturnsAsync(true);
+            var mockValuePersistence = new Mock<IValuePersistenceService>();
+            mockValuePersistence
+                .Setup(service => service.GetSavedValuesAsync(It.IsAny<string>()))
+                .ReturnsAsync((SavedTemplateData?)null);
+            mockValuePersistence
+                .Setup(service => service.SaveTemplateValuesAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Dictionary<string, object>>(),
+                    It.IsAny<string?>(),
+                    It.IsAny<string?>()))
+                .Returns(Task.CompletedTask);
+
+            var viewModel = new DataInputViewModel(
+                CreateTemplateWithPlaceholders(),
+                mockDocGen.Object,
+                mockValuePersistence.Object)
+            {
+                OutputDirectory = outputDirectory,
+                OutputFileNameTemplate = "new-file",
+                ConfirmFileOverwriteAsync = _ => throw new InvalidOperationException(
+                    "Confirmation must not be requested for a new file.")
+            };
+            await viewModel.LoadSavedValuesCommand.Execute().ToTask();
+
+            await viewModel.SaveCommand.Execute().ToTask();
+
+            mockDocGen.Verify(service => service.GenerateDocumentAsync(
+                It.IsAny<string>(),
+                Path.Combine(outputDirectory, "new-file.docx"),
+                It.IsAny<Dictionary<string, PlaceholderValue>>(),
+                It.IsAny<string>()), Times.Once);
+        }
+        finally
+        {
+            Directory.Delete(outputDirectory, recursive: true);
+        }
+    }
+
     private static async Task<DataInputViewModel> CreateLoadedViewModelAsync(
         Template template,
         SavedTemplateData? savedData = null)

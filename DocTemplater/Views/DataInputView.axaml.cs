@@ -34,12 +34,17 @@ public partial class DataInputView : UserControl
         if (_attachedViewModel != null)
         {
             _attachedViewModel.OutputFileNameTemplateFocusRequested -= OnOutputFileNameTemplateFocusRequested;
+            if (_attachedViewModel.ConfirmFileOverwriteAsync == ConfirmFileOverwriteAsync)
+            {
+                _attachedViewModel.ConfirmFileOverwriteAsync = null;
+            }
         }
 
         if (DataContext is DataInputViewModel viewModel)
         {
             // Установить функцию для открытия диалога сохранения файла
             viewModel.BrowseForSaveFileAsync = BrowseForSaveFileAsync;
+            viewModel.ConfirmFileOverwriteAsync = ConfirmFileOverwriteAsync;
             viewModel.OutputFileNameTemplateFocusRequested += OnOutputFileNameTemplateFocusRequested;
             _attachedViewModel = viewModel;
             UpdateOutputFileNameTemplateSelection();
@@ -115,5 +120,16 @@ public partial class DataInputView : UserControl
         });
 
         return file?.Path.LocalPath;
+    }
+
+    private async Task<bool> ConfirmFileOverwriteAsync(string outputPath)
+    {
+        if (TopLevel.GetTopLevel(this) is not Window owner)
+        {
+            return false;
+        }
+
+        var dialog = new OverwriteConfirmationDialog(outputPath);
+        return await dialog.ShowDialog<bool>(owner);
     }
 }

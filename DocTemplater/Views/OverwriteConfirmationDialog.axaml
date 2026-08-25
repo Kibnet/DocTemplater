@@ -1,0 +1,45 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="DocTemplater.Views.OverwriteConfirmationDialog"
+        Title="Файл уже существует"
+        Width="520"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+    <Grid RowDefinitions="Auto,Auto,Auto"
+          Margin="24"
+          RowSpacing="16">
+        <StackPanel Grid.Row="0" Spacing="6">
+            <TextBlock Text="Файл по указанному пути уже существует."
+                       FontSize="16"
+                       FontWeight="SemiBold"/>
+            <TextBlock Text="Перезаписать его?"
+                       FontSize="16"/>
+        </StackPanel>
+
+        <Border Grid.Row="1"
+                Padding="12"
+                BorderThickness="1"
+                CornerRadius="4">
+            <TextBlock Name="OverwriteFilePathTextBlock"
+                       TextWrapping="Wrap"
+                       FontFamily="Consolas"/>
+        </Border>
+
+        <StackPanel Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Spacing="10">
+            <Button Name="CancelOverwriteButton"
+                    Content="Отмена"
+                    Padding="20,8"
+                    Click="OnCancelClick"/>
+            <Button Name="OverwriteButton"
+                    Content="Перезаписать"
+                    Classes="accent"
+                    Padding="20,8"
+                    Click="OnOverwriteClick"/>
+        </StackPanel>
+    </Grid>
+</Window>

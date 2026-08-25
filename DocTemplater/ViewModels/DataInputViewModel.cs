@@ -226,6 +226,11 @@ public class DataInputViewModel : ViewModelBase
     public Func<string, Task<string?>>? BrowseForSaveFileAsync { get; set; }
 
     /// <summary>
+    /// Функция для подтверждения перезаписи существующего файла
+    /// </summary>
+    public Func<string, Task<bool>>? ConfirmFileOverwriteAsync { get; set; }
+
+    /// <summary>
     /// Команда очистки полей
     /// </summary>
     public ReactiveCommand<Unit, Unit> ClearCommand { get; }
@@ -474,8 +479,15 @@ public class DataInputViewModel : ViewModelBase
             // Проверить перезапись
             if (File.Exists(outputPath))
             {
-                // TODO: Добавить диалог подтверждения
-                StatusMessage = "Файл будет перезаписан...";
+                StatusMessage = "Ожидание подтверждения перезаписи...";
+                if (ConfirmFileOverwriteAsync == null ||
+                    !await ConfirmFileOverwriteAsync(outputPath))
+                {
+                    StatusMessage = "Сохранение отменено";
+                    return;
+                }
+
+                StatusMessage = "Генерация документа...";
             }
 
             // Генерация документа

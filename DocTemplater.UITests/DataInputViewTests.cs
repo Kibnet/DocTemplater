@@ -191,6 +191,28 @@ public class DataInputViewTests
         }
     }
 
+    [AvaloniaFact]
+    public async Task DataContext_AssignsOverwriteConfirmationHandler()
+    {
+        Window? window = null;
+
+        try
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var view = CreateView(CreateField("Имя", PlaceholderDataType.String));
+                var viewModel = Assert.IsType<DataInputViewModel>(view.DataContext);
+                window = ShowInWindow(view);
+
+                Assert.NotNull(viewModel.ConfirmFileOverwriteAsync);
+            });
+        }
+        finally
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => window?.Close());
+        }
+    }
+
     private static DataInputView CreateView(params PlaceholderFieldViewModel[] fields)
     {
         var viewModel = new DataInputViewModel(
