@@ -101,3 +101,4 @@ deployment/pgadmin
 src/Arm.Client.Desktop/publish
 src/Arm.Client.Desktop/releases
 .aider*
+**.csproj.lscache
