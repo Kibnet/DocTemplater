@@ -259,7 +259,7 @@ public class PlaceholderFieldViewModel : ViewModelBase
     /// <summary>
     /// Валидация значения
     /// </summary>
-    private void Validate()
+    public void Validate()
     {
         ValidationError = null;
 

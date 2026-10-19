@@ -12,6 +12,8 @@ public class TemplateDiscoveryService : ITemplateDiscoveryService, IDisposable
     private readonly ILogger<TemplateDiscoveryService>? _logger;
     private FileSystemWatcher? _fileWatcher;
 
+    public string TemplatesDirectory => _templatesFolderPath;
+
     /// <summary>
     /// Событие изменения списка шаблонов
     /// </summary>
@@ -19,7 +21,7 @@ public class TemplateDiscoveryService : ITemplateDiscoveryService, IDisposable
 
     public TemplateDiscoveryService(string templatesFolderPath, ILogger<TemplateDiscoveryService>? logger = null)
     {
-        _templatesFolderPath = templatesFolderPath;
+        _templatesFolderPath = Path.GetFullPath(templatesFolderPath);
         _logger = logger;
         
         // Инициализировать FileSystemWatcher
@@ -160,6 +162,7 @@ public class TemplateDiscoveryService : ITemplateDiscoveryService, IDisposable
     /// </summary>
     public void SetTemplatesDirectory(string path)
     {
+        path = Path.GetFullPath(path);
         if (_templatesFolderPath == path)
             return;
 

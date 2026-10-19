@@ -1,86 +1,40 @@
-# DocTemplater UI Tests
+# UI-тесты DocTemplater
 
-This document describes the UI automation tests for the DocTemplater application. These tests verify the user interface functionality in a headless environment.
+Проект `DocTemplater.UITests` использует xUnit/VSTest и Avalonia.Headless.XUnit. Skia рисует настоящий интерфейс в памяти, без окна на рабочем столе.
 
-## Purpose
+## Запуск
 
-UI tests verify that the application's user interface works correctly without requiring manual interaction. They simulate user actions and verify the expected behavior of UI components.
-
-## Test Project Structure
-
-The UI tests are located in a separate project:
-- Project: `DocTemplater.UITests`
-- Framework: xUnit with Avalonia.Headless
-- Test Runner: `dotnet test`
-
-## Test Cases
-
-### 1. Application Startup Test
-Verifies that the application starts up correctly:
-- Application initializes without errors
-- Main window is displayed
-
-### 2. Template Selection View Test
-Verifies that the template selection view is displayed on startup:
-- Main window contains template selection interface
-- UI elements are accessible
-
-### 3. Navigation Test
-Verifies navigation between different views:
-- View transitions work correctly
-- UI state is maintained properly
-
-### 4. Integrated Workflow Test
-Verifies the complete user workflow from template selection to document generation:
-- Template discovery service finds templates
-- Placeholder extraction service extracts placeholders
-- Value persistence service saves and retrieves values
-- Document generation service creates documents
-- Generated documents contain expected content
-
-## Running UI Tests
-
-### Using Command Line
-```bash
-cd c:\Projects\ИЗП\Sources\DocTemplater
-dotnet test --filter "FullyQualifiedName~DocTemplater.UITests"
+```powershell
+dotnet build DocTemplater.sln
+dotnet test DocTemplater.sln
+# Только UI:
+dotnet test DocTemplater.UITests/DocTemplater.UITests.csproj
 ```
 
-### Using the Batch Script
-Double-click on `run-ui-tests.bat` to run the UI tests.
+Для сохранения PNG задайте каталог артефактов:
 
-## Test Results
+```powershell
+$env:DOCTEMPLATER_UI_ARTIFACTS = Join-Path $env:TEMP 'DocTemplater-ui-artifacts'
+dotnet test DocTemplater.UITests/DocTemplater.UITests.csproj --filter "FullyQualifiedName~SavedValuesWorkflowTests"
+```
 
-All UI tests should pass for the application to be considered stable. As of the latest update, all 7 UI tests are passing.
+Без переменной тесты выполняют те же проверки, но не сохраняют PNG. Артефакты находятся вне репозитория и не включаются в коммиты автоматически.
 
-## Automation IDs
+## Сценарии
 
-The following UI elements have automation IDs for testing purposes:
+- `TemplateSelectionViewTests`: элементы экрана выбора, загрузка и обновление.
+- `DataInputViewTests`: поля дат и быстрые кнопки, вставка токенов в имя файла, доступность настроек при ширине 800/900, обработчик подтверждения перезаписи.
+- `OverwriteConfirmationDialogTests`: явное подтверждение, отмена, Escape и закрытие диалога.
+- `SavedValuesWorkflowTests`: нажатия через Headless mouse input, ошибки обязательных полей, сохранение значений в реальный временный JSON, отказ записи и повтор, загрузка через новый service/VM, отсутствие генерации DOCX и перехода назад при сохранении значений. После нового ввода проверяется статус «Есть несохранённые изменения», прежнее содержимое JSON до явного сохранения и новый результат после повторного сохранения. Отдельно проверяется сохранение документа. Открытие папки проверяется при пустом списке и после смены каталога, включая отказ shell.
 
-### TemplateSelectionView
-- `RefreshButton` - Refresh templates button
-- `SelectTemplateButton` - Select template button
-- `TemplatesListBox` - List of available templates
+Новые сценарии проверяют размещение действий при 800×600 и 900×600 и могут сохранять кадры успеха/ошибок. UI tests не используют пользовательский settings.json; shell opener подменён, Проводник при тестах не открывается.
 
-### DataInputView
-- `FieldsItemsControl` - Container for dynamic input fields
-- `ValueTextBox` - Text input field for string/integer values
-- `DateValuePicker` - Date picker for date values
-- `OutputFilePathTextBox` - Output file path text box
-- `BackButton` - Navigate back button
-- `ClearButton` - Clear form button
-- `SaveButton` - Save document button
+## Селекторы
 
-## Maintenance
+Существующие `Name` сохранены: `RefreshButton`, `SelectTemplateButton`, `TemplatesListBox`, `FieldsItemsControl`, `ValueTextBox`, `IntegerValueUpDown`, `DateValuePicker`, `OutputFilePathTextBox`, `BackButton`, `ClearButton`, `SaveButton`.
 
-UI tests should be updated when:
-- New UI elements are added
-- Existing UI elements are modified
-- Navigation flow changes
-- Automation IDs are changed
+Новые: `SaveValuesButton`, `StatusMessageTextBlock`, `OpenTemplatesDirectoryButton`. `SaveButton` по-прежнему создаёт документ; сохранение только значений выполняет `SaveValuesButton`.
 
-The tests are located in:
-- `DocTemplater.UITests\E2ESmokeTests.cs` - Basic smoke tests
-- `DocTemplater.UITests\CompleteWorkflowTests.cs` - Complete workflow tests
-- `DocTemplater.UITests\IntegratedWorkflowTests.cs` - Integrated workflow tests
-- `DocTemplater.UITests\DemonstrationHeadlessTests.cs` - Demonstration of proper Avalonia headless testing concepts
+## Границы evidence
+
+PNG получены из `CaptureRenderedFrame` с реальным Skia rendering. Их нужно просмотреть: успешные bounds assertions сами по себе не подтверждают качество отображения. Текущий harness не записывает видео; fallback — PNG и журнал тестов. Native запуск, появление окна Проводника и поведение установленной версии проверяются отдельно.

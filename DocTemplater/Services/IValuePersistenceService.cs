@@ -8,14 +8,20 @@ namespace DocTemplater.Services;
 public interface IValuePersistenceService
 {
     /// <summary>
-    /// Загрузить настройки приложения
+    /// Загрузить изолированный снимок настроек приложения
     /// </summary>
     Task<AppSettings> LoadSettingsAsync();
     
     /// <summary>
-    /// Сохранить настройки приложения
+    /// Полностью заменить настройки переданным снимком (инициализация/восстановление).
+    /// Для изменения отдельных данных используйте соответствующий метод обновления.
     /// </summary>
     Task SaveSettingsAsync(AppSettings settings);
+
+    /// <summary>
+    /// Обновить только каталог шаблонов на актуальном состоянии настроек
+    /// </summary>
+    Task SaveTemplatesDirectoryAsync(string directory);
     
     /// <summary>
     /// Получить сохраненные значения для шаблона

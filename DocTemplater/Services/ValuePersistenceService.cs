@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Threading;
 using DocTemplater.Domain;
 using Microsoft.Extensions.Logging;
 
@@ -12,6 +13,7 @@ public class ValuePersistenceService : IValuePersistenceService
     private readonly string _settingsFilePath;
     private readonly ILogger<ValuePersistenceService>? _logger;
     private AppSettings? _cachedSettings;
+    private readonly SemaphoreSlim _storageLock = new(1, 1);
 
     public ValuePersistenceService(string? settingsFilePath = null, ILogger<ValuePersistenceService>? logger = null)
     {
@@ -24,9 +26,22 @@ public class ValuePersistenceService : IValuePersistenceService
     }
 
     /// <summary>
-    /// Загрузить настройки приложения
+    /// Загрузить изолированный снимок настроек приложения
     /// </summary>
     public async Task<AppSettings> LoadSettingsAsync()
+    {
+        await _storageLock.WaitAsync();
+        try
+        {
+            return Snapshot(await LoadSettingsCoreAsync());
+        }
+        finally
+        {
+            _storageLock.Release();
+        }
+    }
+
+    private async Task<AppSettings> LoadSettingsCoreAsync()
     {
         if (_cachedSettings != null)
             return _cachedSettings;
@@ -36,9 +51,8 @@ public class ValuePersistenceService : IValuePersistenceService
             if (!File.Exists(_settingsFilePath))
             {
                 _logger?.LogInformation("Файл настроек не найден, создание по умолчанию");
-                _cachedSettings = new AppSettings();
-                await SaveSettingsAsync(_cachedSettings);
-                return _cachedSettings;
+                await WriteSettingsCoreAsync(new AppSettings());
+                return _cachedSettings!;
             }
 
             var json = await File.ReadAllTextAsync(_settingsFilePath);
@@ -56,14 +70,45 @@ public class ValuePersistenceService : IValuePersistenceService
     }
 
     /// <summary>
-    /// Сохранить настройки приложения
+    /// Полностью заменить настройки переданным снимком
     /// </summary>
     public async Task SaveSettingsAsync(AppSettings settings)
+    {
+        var snapshot = Snapshot(settings);
+        await _storageLock.WaitAsync();
+        try
+        {
+            await WriteSettingsCoreAsync(snapshot);
+        }
+        finally
+        {
+            _storageLock.Release();
+        }
+    }
+
+    public async Task SaveTemplatesDirectoryAsync(string directory)
+    {
+        await _storageLock.WaitAsync();
+        try
+        {
+            var settings = Snapshot(await LoadSettingsCoreAsync());
+            settings.TemplatesFolderPath = directory;
+            await WriteSettingsCoreAsync(settings);
+        }
+        finally
+        {
+            _storageLock.Release();
+        }
+    }
+
+    // Core-методы вызываются только под общим lock: снимок и запись — одна операция.
+    private async Task WriteSettingsCoreAsync(AppSettings settings)
     {
         try
         {
             // Создать директорию, если не существует
-            var directory = Path.GetDirectoryName(_settingsFilePath);
+            var fullPath = Path.GetFullPath(_settingsFilePath);
+            var directory = Path.GetDirectoryName(fullPath);
             if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
@@ -76,7 +121,18 @@ public class ValuePersistenceService : IValuePersistenceService
             };
 
             var json = JsonSerializer.Serialize(settings, options);
-            await File.WriteAllTextAsync(_settingsFilePath, json);
+            // Замена в том же каталоге сохраняет прежний JSON при отказе записи.
+            var temporaryPath = fullPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                await File.WriteAllTextAsync(temporaryPath, json);
+                File.Move(temporaryPath, fullPath, overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(temporaryPath))
+                    File.Delete(temporaryPath);
+            }
             
             _cachedSettings = settings;
             _logger?.LogInformation("Настройки сохранены в {Path}", _settingsFilePath);
@@ -113,16 +169,18 @@ public class ValuePersistenceService : IValuePersistenceService
         string? lastSaveDirectory = null,
         string? outputFileNameTemplate = null)
     {
+        var snapshot = Snapshot(values);
+        await _storageLock.WaitAsync();
         try
         {
-            var settings = await LoadSettingsAsync();
+            var settings = Snapshot(await LoadSettingsCoreAsync());
             
             // Найти существующую запись или создать новую
             var existingData = settings.Templates.FirstOrDefault(t => t.TemplateFileName == templateFileName);
             
             if (existingData != null)
             {
-                existingData.FieldValues = values;
+                existingData.FieldValues = snapshot;
                 existingData.LastUsed = DateTimeOffset.Now;
                 if (lastSaveDirectory != null)
                 {
@@ -139,14 +197,14 @@ public class ValuePersistenceService : IValuePersistenceService
                 settings.Templates.Add(new SavedTemplateData
                 {
                     TemplateFileName = templateFileName,
-                    FieldValues = values,
+                    FieldValues = snapshot,
                     LastUsed = DateTimeOffset.Now,
                     LastSaveDirectory = lastSaveDirectory,
                     OutputFileNameTemplate = outputFileNameTemplate
                 });
             }
 
-            await SaveSettingsAsync(settings);
+            await WriteSettingsCoreAsync(settings);
             _logger?.LogInformation("Значения сохранены для шаблона: {TemplateName}", templateFileName);
         }
         catch (Exception ex)
@@ -154,5 +212,33 @@ public class ValuePersistenceService : IValuePersistenceService
             _logger?.LogError(ex, "Ошибка при сохранении значений для шаблона: {TemplateName}", templateFileName);
             throw;
         }
+        finally
+        {
+            _storageLock.Release();
+        }
     }
+
+    private static AppSettings Snapshot(AppSettings settings) => new()
+    {
+        TemplatesFolderPath = settings.TemplatesFolderPath,
+        DefaultOutputPath = settings.DefaultOutputPath,
+        CultureName = settings.CultureName,
+        OpenAfterSaveDefault = settings.OpenAfterSaveDefault,
+        Templates = settings.Templates.Select(template => new SavedTemplateData
+        {
+            TemplateFileName = template.TemplateFileName,
+            FieldValues = Snapshot(template.FieldValues),
+            LastUsed = template.LastUsed,
+            LastSaveDirectory = template.LastSaveDirectory,
+            OutputFileNameTemplate = template.OutputFileNameTemplate
+        }).ToList()
+    };
+
+    private static Dictionary<string, object> Snapshot(Dictionary<string, object> values) =>
+        values.ToDictionary(pair => pair.Key, pair => pair.Value switch
+        {
+            // Поддерживаемые скаляры неизменяемы; сохраняем их CLR-типы для текущего сеанса.
+            string or int or DateTime or DateTimeOffset => pair.Value,
+            _ => JsonSerializer.SerializeToElement(pair.Value)
+        });
 }

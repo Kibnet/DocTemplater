@@ -15,21 +15,25 @@ public class TemplateSelectionViewModel : ViewModelBase
     private readonly ITemplateDiscoveryService _templateDiscoveryService;
     private readonly IPlaceholderExtractionService _placeholderExtractionService;
     private readonly IValuePersistenceService? _valuePersistenceService;
+    private readonly IDirectoryOpener _directoryOpener;
     
     private List<Template> _templates = new();
     private Template? _selectedTemplate;
     private bool _isLoading;
+    private int _directoryChangesInProgress;
     private string _statusMessage = string.Empty;
     private string _templatesDirectory = string.Empty;
 
     public TemplateSelectionViewModel(
         ITemplateDiscoveryService templateDiscoveryService,
         IPlaceholderExtractionService placeholderExtractionService,
-        IValuePersistenceService? valuePersistenceService = null)
+        IValuePersistenceService? valuePersistenceService = null,
+        IDirectoryOpener? directoryOpener = null)
     {
         _templateDiscoveryService = templateDiscoveryService;
         _placeholderExtractionService = placeholderExtractionService;
         _valuePersistenceService = valuePersistenceService;
+        _directoryOpener = directoryOpener ?? new SystemDirectoryOpener();
 
         // Подписаться на изменения в директории шаблонов
         if (_templateDiscoveryService is TemplateDiscoveryService tds)
@@ -52,6 +56,9 @@ public class TemplateSelectionViewModel : ViewModelBase
             EditTemplate,
             this.WhenAnyValue(x => x.SelectedTemplate, (Template? template) => template != null));
         ChangeTemplatesDirectoryCommand = ReactiveCommand.Create(() => { });
+        OpenTemplatesDirectoryCommand = ReactiveCommand.Create(
+            OpenTemplatesDirectory, this.WhenAnyValue(x => x.IsLoading, x => x.IsChangingDirectory,
+                (loading, changing) => !loading && !changing));
 
         // Автоматическая загрузка при создании
         LoadTemplatesCommand.Execute().Subscribe();
@@ -72,15 +79,14 @@ public class TemplateSelectionViewModel : ViewModelBase
                 var settings = await _valuePersistenceService.LoadSettingsAsync();
                 TemplatesDirectory = settings.TemplatesFolderPath;
             }
-            else if (_templateDiscoveryService is TemplateDiscoveryService tds)
+            else
             {
-                // Получить текущий путь из сервиса через рефлексию или добавить публичное свойство
-                TemplatesDirectory = Path.Combine(AppContext.BaseDirectory, "Templates");
+                TemplatesDirectory = _templateDiscoveryService.TemplatesDirectory;
             }
         }
         catch
         {
-            TemplatesDirectory = Path.Combine(AppContext.BaseDirectory, "Templates");
+            TemplatesDirectory = _templateDiscoveryService.TemplatesDirectory;
         }
     }
 
@@ -92,23 +98,27 @@ public class TemplateSelectionViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(_templatesDirectory))
             return;
 
+        BeginDirectoryChange();
         try
         {
             if (Directory.Exists(_templatesDirectory))
             {
                 _templateDiscoveryService.SetTemplatesDirectory(_templatesDirectory);
+                this.RaisePropertyChanged(nameof(ActiveTemplatesDirectory));
                 
                 if (_valuePersistenceService != null)
                 {
-                    var settings = await _valuePersistenceService.LoadSettingsAsync();
-                    settings.TemplatesFolderPath = _templatesDirectory;
-                    await _valuePersistenceService.SaveSettingsAsync(settings);
+                    await _valuePersistenceService.SaveTemplatesDirectoryAsync(_templatesDirectory);
                 }
             }
         }
         catch (Exception ex)
         {
             StatusMessage = $"Ошибка при изменении директории: {ex.Message}";
+        }
+        finally
+        {
+            EndDirectoryChange();
         }
     }
 
@@ -137,6 +147,20 @@ public class TemplateSelectionViewModel : ViewModelBase
     {
         get => _isLoading;
         set => this.RaiseAndSetIfChanged(ref _isLoading, value);
+    }
+
+    public bool IsChangingDirectory => _directoryChangesInProgress > 0;
+
+    private void BeginDirectoryChange()
+    {
+        _directoryChangesInProgress++;
+        this.RaisePropertyChanged(nameof(IsChangingDirectory));
+    }
+
+    private void EndDirectoryChange()
+    {
+        _directoryChangesInProgress--;
+        this.RaisePropertyChanged(nameof(IsChangingDirectory));
     }
 
     /// <summary>
@@ -190,6 +214,31 @@ public class TemplateSelectionViewModel : ViewModelBase
     /// Команда изменения директории шаблонов
     /// </summary>
     public ReactiveCommand<Unit, Unit> ChangeTemplatesDirectoryCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> OpenTemplatesDirectoryCommand { get; }
+
+    public string ActiveTemplatesDirectory => _templateDiscoveryService.TemplatesDirectory;
+
+    private void OpenTemplatesDirectory()
+    {
+        if (IsLoading || IsChangingDirectory)
+            return;
+        try
+        {
+            var path = Path.GetFullPath(ActiveTemplatesDirectory);
+            if (!Directory.Exists(path))
+            {
+                StatusMessage = $"Каталог шаблонов не существует: {path}";
+                return;
+            }
+            _directoryOpener.Open(path);
+            StatusMessage = $"Отправлен запрос на открытие папки: {path}";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Ошибка при открытии папки шаблонов: {ex.Message}";
+        }
+    }
 
     /// <summary>
     /// Функция для выбора директории (устанавливается из View)
@@ -288,6 +337,7 @@ public class TemplateSelectionViewModel : ViewModelBase
         // Обновить список шаблонов в UI-потоке
         RxApp.MainThreadScheduler.Schedule(async () =>
         {
+            this.RaisePropertyChanged(nameof(ActiveTemplatesDirectory));
             // Добавить небольшую задержку, чтобы избежать множественных обновлений
             await Task.Delay(500);
             await LoadTemplatesAsync();
@@ -299,25 +349,25 @@ public class TemplateSelectionViewModel : ViewModelBase
     /// </summary>
     public async Task ChangeTemplatesDirectoryAsync()
     {
-        if (BrowseForFolderAsync == null)
+        if (BrowseForFolderAsync == null || IsChangingDirectory)
             return;
 
-        var selectedPath = await BrowseForFolderAsync();
-        if (string.IsNullOrEmpty(selectedPath))
-            return;
-
+        BeginDirectoryChange();
         try
         {
+            var selectedPath = await BrowseForFolderAsync();
+            if (string.IsNullOrEmpty(selectedPath))
+                return;
+
             // Установить новую директорию
             _templateDiscoveryService.SetTemplatesDirectory(selectedPath);
-            TemplatesDirectory = selectedPath;
+            this.RaiseAndSetIfChanged(ref _templatesDirectory, selectedPath, nameof(TemplatesDirectory));
+            this.RaisePropertyChanged(nameof(ActiveTemplatesDirectory));
             
             // Сохранить в настройки
             if (_valuePersistenceService != null)
             {
-                var settings = await _valuePersistenceService.LoadSettingsAsync();
-                settings.TemplatesFolderPath = selectedPath;
-                await _valuePersistenceService.SaveSettingsAsync(settings);
+                await _valuePersistenceService.SaveTemplatesDirectoryAsync(selectedPath);
             }
             
             StatusMessage = $"Директория шаблонов изменена: {selectedPath}";
@@ -325,6 +375,10 @@ public class TemplateSelectionViewModel : ViewModelBase
         catch (Exception ex)
         {
             StatusMessage = $"Ошибка при изменении директории: {ex.Message}";
+        }
+        finally
+        {
+            EndDirectoryChange();
         }
     }
 }

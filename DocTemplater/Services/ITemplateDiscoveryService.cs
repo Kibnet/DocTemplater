@@ -7,6 +7,8 @@ namespace DocTemplater.Services;
 /// </summary>
 public interface ITemplateDiscoveryService
 {
+    string TemplatesDirectory { get; }
+
     /// <summary>
     /// Получить все доступные шаблоны из папки Templates
     /// </summary>

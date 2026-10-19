@@ -314,6 +314,8 @@ public class DataInputViewTests
             return Task.CompletedTask;
         }
 
+        public Task SaveTemplatesDirectoryAsync(string directory) => Task.CompletedTask;
+
         public Task<SavedTemplateData?> GetSavedValuesAsync(string templateFileName)
         {
             return Task.FromResult<SavedTemplateData?>(null);

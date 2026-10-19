@@ -32,6 +32,151 @@ public class ValuePersistenceServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task ConcurrentTemplateSaves_PreserveEverySuccessfulUpdateOnDiskAndInCache()
+    {
+        await _service.SaveTemplateValuesAsync("Seed.docx", new() { ["Поле"] = "Исходное" });
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var saves = Enumerable.Range(0, 16).Select(async index =>
+        {
+            await start.Task;
+            await _service.SaveTemplateValuesAsync($"Template-{index}.docx", new() { ["Поле"] = index });
+        }).ToArray();
+        start.SetResult();
+        await Task.WhenAll(saves);
+
+        var cached = await _service.LoadSettingsAsync();
+        var fresh = new ValuePersistenceService(Path.Combine(_testDirectory, "settings.json"));
+        var onDisk = await fresh.LoadSettingsAsync();
+        Assert.Equal(17, cached.Templates.Count);
+        Assert.Equal(17, onDisk.Templates.Count);
+        for (var index = 0; index < 16; index++)
+        {
+            Assert.Equal(index.ToString(), (await fresh.GetSavedValuesAsync($"Template-{index}.docx"))!.FieldValues["Поле"].ToString());
+        }
+    }
+
+    [Fact]
+    public async Task InitialFullSettingsSave_IsOrderedBeforeConcurrentFieldUpdates()
+    {
+        var initial = new DocTemplater.Domain.AppSettings
+        {
+            CultureName = "ru-RU",
+            Templates = new()
+            {
+                new() { TemplateFileName = "Seed.docx", FieldValues = new() { ["Поле"] = new string('x', 32768) } }
+            }
+        };
+        var initialize = _service.SaveSettingsAsync(initial);
+        var saveValues = _service.SaveTemplateValuesAsync("New.docx", new() { ["Имя"] = "Новое" });
+        var saveDirectory = _service.SaveTemplatesDirectoryAsync("New directory");
+        await Task.WhenAll(initialize, saveValues, saveDirectory);
+
+        var fresh = new ValuePersistenceService(Path.Combine(_testDirectory, "settings.json"));
+        var saved = await fresh.LoadSettingsAsync();
+        Assert.Equal(2, saved.Templates.Count);
+        Assert.Equal("ru-RU", saved.CultureName);
+        Assert.Equal("New directory", saved.TemplatesFolderPath);
+        Assert.Equal("Новое", (await fresh.GetSavedValuesAsync("New.docx"))!.FieldValues["Имя"].ToString());
+        Assert.Equal(32768, (await fresh.GetSavedValuesAsync("Seed.docx"))!.FieldValues["Поле"].ToString()!.Length);
+    }
+
+    [Fact]
+    public async Task ConcurrentDirectoryAndTemplateUpdates_PreserveBothChanges()
+    {
+        await _service.SaveSettingsAsync(new DocTemplater.Domain.AppSettings { CultureName = "ru-RU" });
+        var newDirectory = Path.Combine(_testDirectory, "Новый каталог");
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var saves = Enumerable.Range(0, 12).Select(async index =>
+        {
+            await start.Task;
+            if (index % 2 == 0)
+                await _service.SaveTemplatesDirectoryAsync(newDirectory);
+            else
+                await _service.SaveTemplateValuesAsync($"Template-{index}.docx", new() { ["Поле"] = index });
+        }).ToArray();
+        start.SetResult();
+        await Task.WhenAll(saves);
+
+        var fresh = new ValuePersistenceService(Path.Combine(_testDirectory, "settings.json"));
+        foreach (var service in new[] { _service, fresh })
+        {
+            var settings = await service.LoadSettingsAsync();
+            Assert.Equal(newDirectory, settings.TemplatesFolderPath);
+            Assert.Equal("ru-RU", settings.CultureName);
+            Assert.Equal(6, settings.Templates.Count);
+            foreach (var index in Enumerable.Range(0, 12).Where(index => index % 2 != 0))
+                Assert.Equal(index.ToString(), settings.Templates.Single(t => t.TemplateFileName == $"Template-{index}.docx").FieldValues["Поле"].ToString());
+        }
+    }
+
+    [Fact]
+    public async Task PublicReadsAndSaveArguments_AreDetachedFromTheCommittedCache()
+    {
+        var original = new DocTemplater.Domain.AppSettings { TemplatesFolderPath = "Before" };
+        await _service.SaveSettingsAsync(original);
+        original.TemplatesFolderPath = "Not saved";
+        var date = new DateTimeOffset(2026, 10, 19, 0, 0, 0, TimeSpan.FromHours(3));
+        await _service.SaveTemplateValuesAsync("test.docx", new() { ["Имя"] = "До", ["Количество"] = 3, ["Дата"] = date });
+
+        var snapshot = await _service.LoadSettingsAsync();
+        Assert.IsType<string>(snapshot.Templates[0].FieldValues["Имя"]);
+        Assert.IsType<int>(snapshot.Templates[0].FieldValues["Количество"]);
+        Assert.Equal(date, Assert.IsType<DateTimeOffset>(snapshot.Templates[0].FieldValues["Дата"]));
+        snapshot.TemplatesFolderPath = "Also not saved";
+        snapshot.Templates.Clear();
+        var savedData = (await _service.GetSavedValuesAsync("test.docx"))!;
+        savedData.FieldValues["Имя"] = "Не записано";
+
+        Assert.Equal("Before", (await _service.LoadSettingsAsync()).TemplatesFolderPath);
+        Assert.Equal("До", (await _service.GetSavedValuesAsync("test.docx"))!.FieldValues["Имя"].ToString());
+        var fresh = new ValuePersistenceService(Path.Combine(_testDirectory, "settings.json"));
+        Assert.Equal("Before", (await fresh.LoadSettingsAsync()).TemplatesFolderPath);
+        Assert.Equal("До", (await fresh.GetSavedValuesAsync("test.docx"))!.FieldValues["Имя"].ToString());
+    }
+
+    [Fact]
+    public async Task FailedDirectoryWrite_KeepsCommittedStateAndReleasesLockForRetry()
+    {
+        await _service.SaveTemplateValuesAsync("test.docx", new() { ["Имя"] = "До" });
+        var previousPath = (await _service.LoadSettingsAsync()).TemplatesFolderPath;
+        var path = Path.Combine(_testDirectory, "settings.json");
+        var previousJson = await File.ReadAllTextAsync(path);
+        using (var lockedFile = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            var error = await Record.ExceptionAsync(() => _service.SaveTemplatesDirectoryAsync("New"));
+            Assert.True(error is IOException or UnauthorizedAccessException, error?.ToString());
+            Assert.Equal(previousPath, (await _service.LoadSettingsAsync().WaitAsync(TimeSpan.FromSeconds(5))).TemplatesFolderPath);
+            Assert.Equal(previousJson, await File.ReadAllTextAsync(path));
+        }
+        await _service.SaveTemplatesDirectoryAsync("New").WaitAsync(TimeSpan.FromSeconds(5));
+        var fresh = new ValuePersistenceService(path);
+        Assert.Equal("New", (await fresh.LoadSettingsAsync()).TemplatesFolderPath);
+        Assert.Equal("До", (await fresh.GetSavedValuesAsync("test.docx"))!.FieldValues["Имя"].ToString());
+    }
+
+    [Fact]
+    public async Task FailedWrite_KeepsPreviousFileAndCachedValues_AndCanBeRetried()
+    {
+        await _service.SaveTemplateValuesAsync("test.docx", new() { ["Имя"] = "До" });
+        var path = Path.Combine(_testDirectory, "settings.json");
+        var previousJson = await File.ReadAllTextAsync(path);
+
+        using (var lockedFile = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            var error = await Record.ExceptionAsync(() => _service.SaveTemplateValuesAsync(
+                "test.docx", new() { ["Имя"] = "После" }));
+            Assert.True(error is IOException or UnauthorizedAccessException, error?.ToString());
+            Assert.Equal("До", (await _service.GetSavedValuesAsync("test.docx"))!.FieldValues["Имя"].ToString());
+            Assert.Equal(previousJson, await File.ReadAllTextAsync(path));
+        }
+
+        Assert.Empty(Directory.GetFiles(_testDirectory, "*.tmp"));
+        await _service.SaveTemplateValuesAsync("test.docx", new() { ["Имя"] = "После" });
+        var freshService = new ValuePersistenceService(path);
+        Assert.Equal("После", (await freshService.GetSavedValuesAsync("test.docx"))!.FieldValues["Имя"].ToString());
+    }
+
+    [Fact]
     public async Task SaveTemplateValuesAsync_SavesValuesToFile()
     {
         // Arrange

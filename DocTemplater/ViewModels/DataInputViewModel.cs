@@ -15,6 +15,7 @@ namespace DocTemplater.ViewModels;
 /// </summary>
 public class DataInputViewModel : ViewModelBase
 {
+    private const string ValuesSavedStatus = "Значения сохранены";
     private readonly Template _template;
     private readonly IDocumentGenerationService _documentGenerationService;
     private readonly IValuePersistenceService _valuePersistenceService;
@@ -31,6 +32,7 @@ public class DataInputViewModel : ViewModelBase
     private int _outputFileNameTemplateSelectionEnd = -1;
     private bool _openAfterSave = false;
     private bool _isSaving;
+    private bool _isLoading = true;
     private string _statusMessage = string.Empty;
 
     public DataInputViewModel(
@@ -57,13 +59,16 @@ public class DataInputViewModel : ViewModelBase
         }
 
         // Команды с явным указанием планировщика для UI-потока
+        var canEdit = this.WhenAnyValue(x => x.IsBusy).Select(busy => !busy);
         SaveCommand = ReactiveCommand.CreateFromTask(
-            SaveDocumentAsync,
+            SaveDocumentAsync, canEdit,
             outputScheduler: RxApp.MainThreadScheduler);
-        BackCommand = ReactiveCommand.Create(() => { });
-        BrowseOutputDirectoryCommand = ReactiveCommand.Create(BrowseOutputDirectory);
-        BrowseOutputPathCommand = ReactiveCommand.Create(BrowseOutputDirectory);
-        ClearCommand = ReactiveCommand.Create(ClearFields);
+        SaveValuesCommand = ReactiveCommand.CreateFromTask(
+            SaveValuesAsync, canEdit, outputScheduler: RxApp.MainThreadScheduler);
+        BackCommand = ReactiveCommand.Create(() => { }, canEdit);
+        BrowseOutputDirectoryCommand = ReactiveCommand.Create(BrowseOutputDirectory, canEdit);
+        BrowseOutputPathCommand = ReactiveCommand.Create(BrowseOutputDirectory, canEdit);
+        ClearCommand = ReactiveCommand.Create(ClearFields, canEdit);
 
         // Загрузить сохраненные значения и создать поля
         LoadSavedValuesCommand = ReactiveCommand.CreateFromTask(
@@ -93,7 +98,12 @@ public class DataInputViewModel : ViewModelBase
                 field.SetInsertPlaceholderTokenHandler(InsertPlaceholderToken);
                 _fieldSubscriptions.Add(field.WhenAnyValue(x => x.Value)
                     .Skip(1)
-                    .Subscribe(_ => UpdateOutputFileName()));
+                    .Subscribe(_ =>
+                    {
+                        UpdateOutputFileName();
+                        if (StatusMessage == ValuesSavedStatus)
+                            StatusMessage = "Есть несохранённые изменения";
+                    }));
             }
 
             UpdateOutputFileName();
@@ -160,8 +170,14 @@ public class DataInputViewModel : ViewModelBase
     public bool IsSaving
     {
         get => _isSaving;
-        set => this.RaiseAndSetIfChanged(ref _isSaving, value);
+        set
+        {
+            this.RaiseAndSetIfChanged(ref _isSaving, value);
+            this.RaisePropertyChanged(nameof(IsBusy));
+        }
     }
+
+    public bool IsBusy => _isLoading || IsSaving;
 
     /// <summary>
     /// Сообщение о статусе
@@ -204,6 +220,8 @@ public class DataInputViewModel : ViewModelBase
     /// Команда сохранения
     /// </summary>
     public ReactiveCommand<Unit, Unit> SaveCommand { get; }
+
+    public ReactiveCommand<Unit, Unit> SaveValuesCommand { get; }
 
     /// <summary>
     /// Команда возврата
@@ -283,6 +301,8 @@ public class DataInputViewModel : ViewModelBase
 
     private async Task LoadSavedValuesAsync()
     {
+        _isLoading = true;
+        this.RaisePropertyChanged(nameof(IsBusy));
         try
         {
             // Получить сохраненные значения
@@ -319,6 +339,11 @@ public class DataInputViewModel : ViewModelBase
         catch (Exception ex)
         {
             StatusMessage = $"Ошибка при загрузке сохраненных значений: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+            this.RaisePropertyChanged(nameof(IsBusy));
         }
     }
 
@@ -434,18 +459,16 @@ public class DataInputViewModel : ViewModelBase
 
     private async Task SaveDocumentAsync()
     {
+        if (IsBusy)
+            return;
         try
         {
             IsSaving = true;
             StatusMessage = "Проверка данных...";
 
             // Валидация
-            var invalidFields = Fields.Where(f => !f.IsValid).ToList();
-            if (invalidFields.Any())
-            {
-                StatusMessage = $"Исправьте ошибки в {invalidFields.Count} полях";
+            if (!ValidateFields())
                 return;
-            }
 
             if (string.IsNullOrWhiteSpace(OutputFileName))
             {
@@ -562,6 +585,51 @@ public class DataInputViewModel : ViewModelBase
                 }
             }
         }).Subscribe();
+    }
+
+    private bool ValidateFields()
+    {
+        foreach (var field in Fields)
+            field.Validate();
+        var invalidCount = Fields.Count(field => !field.IsValid);
+        if (invalidCount == 0)
+            return true;
+        StatusMessage = $"Исправьте ошибки в {invalidCount} полях";
+        return false;
+    }
+
+    private async Task SaveValuesAsync()
+    {
+        if (IsBusy)
+            return;
+        try
+        {
+            IsSaving = true;
+            StatusMessage = "Проверка данных...";
+            if (!ValidateFields())
+                return;
+
+            var values = Fields.ToDictionary(field => field.Placeholder.Name, field => field.Value!);
+            StatusMessage = "Сохранение значений...";
+            var templateKey = _template.FileName + ".docx";
+            var previous = await _valuePersistenceService.GetSavedValuesAsync(templateKey);
+            var mergedValues = previous == null
+                ? new Dictionary<string, object>()
+                : new Dictionary<string, object>(previous.FieldValues);
+            foreach (var value in values)
+                mergedValues[value.Key] = value.Value;
+
+            await _valuePersistenceService.SaveTemplateValuesAsync(templateKey, mergedValues);
+            StatusMessage = ValuesSavedStatus;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Ошибка сохранения значений: {ex.Message}";
+        }
+        finally
+        {
+            IsSaving = false;
+        }
     }
 
     private void ClearFields()
