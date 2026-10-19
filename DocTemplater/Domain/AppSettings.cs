@@ -10,7 +10,8 @@ public class AppSettings
     /// <summary>
     /// Расположение файлов шаблонов
     /// </summary>
-    public string TemplatesFolderPath { get; set; } = "./Templates";
+    public string TemplatesFolderPath { get; set; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DocTemplater", "Templates");
     
     /// <summary>
     /// Расположение по умолчанию для сгенерированных файлов

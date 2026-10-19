@@ -7,6 +7,7 @@
         x:Class="DocTemplater.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Icon="/Assets/avalonia-logo.ico"
+        Width="900" Height="650" MinWidth="800" MinHeight="450"
         Title="DocTemplater">
 
     <Design.DataContext>
@@ -15,6 +16,21 @@
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <ContentControl Content="{Binding CurrentView}" Name="CurrentViewContentControl" />
+    <Grid RowDefinitions="*,Auto">
+        <ContentControl Content="{Binding CurrentView}" Name="CurrentViewContentControl" />
+        <Border Grid.Row="1" BorderThickness="0,1,0,0" BorderBrush="#40808080" Padding="12,8">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Spacing="3">
+                    <TextBlock Text="{Binding Updates.VersionLabel}" FontSize="12" Opacity="0.7" Name="ApplicationVersion"/>
+                    <TextBlock Text="{Binding Updates.Status}" TextWrapping="Wrap" FontSize="12" Name="UpdateStatus"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="8">
+                    <Button Content="Проверить обновления" Command="{Binding CheckUpdatesCommand}" Name="CheckUpdatesButton"/>
+                    <Button Content="Установить и перезапустить" Command="{Binding ApplyUpdateCommand}"
+                            IsVisible="{Binding Updates.IsReady}" Name="ApplyUpdateButton"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
 
 </Window>

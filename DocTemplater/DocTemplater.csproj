@@ -6,6 +6,9 @@
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <Version>0.1.0</Version>
+    <DefineConstants Condition="'$(NativeUpdateFixture)' == 'true'">$(DefineConstants);UPDATE_FIXTURE</DefineConstants>
+    <AssemblyName Condition="'$(NativeUpdateFixture)' == 'true'">DocTemplater.UpdateFixture</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,5 +31,6 @@
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.3.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.1" />
     <PackageReference Include="System.Reactive" Version="6.1.0" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 </Project>

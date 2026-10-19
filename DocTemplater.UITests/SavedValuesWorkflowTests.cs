@@ -185,7 +185,12 @@ public class SavedValuesWorkflowTests
             }
             var other = Path.Combine(directory, "Другие шаблоны");
             Directory.CreateDirectory(other);
-            vm.TemplatesDirectory = other;
+            var pathBox = view.GetVisualDescendants().OfType<TextBox>().Single();
+            pathBox.Focus();
+            pathBox.SelectAll();
+            window.KeyTextInput(other);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(other, vm.ActiveTemplatesDirectory);
             await Click(button);
             Assert.Equal(other, opener.LastPath);
             opener.Error = true;
@@ -217,6 +222,10 @@ public class SavedValuesWorkflowTests
             $"{button.Name}: enabled={button.IsEnabled}, command={button.Command?.CanExecute(null)}, busy={(button.DataContext as DataInputViewModel)?.IsBusy}; " +
             string.Join("; ", button.GetVisualAncestors().OfType<Control>().Select(c => $"{c.GetType().Name}/{c.Name}: {c.IsEnabled}/{c.IsEffectivelyEnabled}")));
         var window = (Window)TopLevel.GetTopLevel(button)!;
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+        window.UpdateLayout();
         var point = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window)!.Value;
         window.MouseDown(point, MouseButton.Left);
         window.MouseUp(point, MouseButton.Left);

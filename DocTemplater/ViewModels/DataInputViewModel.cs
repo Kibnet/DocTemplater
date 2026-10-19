@@ -22,6 +22,7 @@ public class DataInputViewModel : ViewModelBase
     private readonly CultureInfo _culture;
     private readonly string _templateDirectory;
     private readonly CompositeDisposable _fieldSubscriptions = new();
+    private readonly Action<string>? _ensureSafeOutput;
     
     private List<PlaceholderFieldViewModel> _fields = new();
     private string _outputDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
@@ -34,17 +35,32 @@ public class DataInputViewModel : ViewModelBase
     private bool _isSaving;
     private bool _isLoading = true;
     private string _statusMessage = string.Empty;
+    private string? _savedFieldsSnapshot;
+    private string? _savedOutputDirectory;
+    private string? _savedOutputName;
+
+    private string FieldsSnapshot() => System.Text.Json.JsonSerializer.Serialize(Fields.Select(f => new { f.Placeholder.Name, f.Value }));
+    public bool HasUnsavedChanges => _savedFieldsSnapshot != null &&
+        (_savedFieldsSnapshot != FieldsSnapshot() || _savedOutputDirectory != OutputDirectory || _savedOutputName != OutputFileNameTemplate);
+
+    private void CaptureSavedState(bool includeOutput)
+    {
+        _savedFieldsSnapshot = FieldsSnapshot();
+        if (includeOutput) { _savedOutputDirectory = OutputDirectory; _savedOutputName = OutputFileNameTemplate; }
+    }
 
     public DataInputViewModel(
         Template template,
         IDocumentGenerationService documentGenerationService,
         IValuePersistenceService valuePersistenceService,
-        string cultureName = "ru-RU")
+        string cultureName = "ru-RU",
+        Action<string>? ensureSafeOutput = null)
     {
         _template = template;
         _documentGenerationService = documentGenerationService;
         _valuePersistenceService = valuePersistenceService;
         _culture = CultureInfo.GetCultureInfo(cultureName);
+        _ensureSafeOutput = ensureSafeOutput;
         
         // Сохранить директорию шаблона
         _templateDirectory = Path.GetDirectoryName(template.FilePath) ?? string.Empty;
@@ -335,6 +351,7 @@ public class DataInputViewModel : ViewModelBase
             }
 
             Fields = fields;
+            CaptureSavedState(includeOutput: true);
         }
         catch (Exception ex)
         {
@@ -498,6 +515,7 @@ public class DataInputViewModel : ViewModelBase
 
             // Сгенерировать путь вывода
             var outputPath = Path.Combine(OutputDirectory, OutputFileName + ".docx");
+            _ensureSafeOutput?.Invoke(outputPath);
 
             // Проверить перезапись
             if (File.Exists(outputPath))
@@ -540,6 +558,7 @@ public class DataInputViewModel : ViewModelBase
                 OutputFileNameTemplate);
 
             StatusMessage = $"Документ успешно сохранен: {outputPath}";
+            CaptureSavedState(includeOutput: true);
 
             // Открыть документ, если требуется
             if (OpenAfterSave)
@@ -620,6 +639,7 @@ public class DataInputViewModel : ViewModelBase
                 mergedValues[value.Key] = value.Value;
 
             await _valuePersistenceService.SaveTemplateValuesAsync(templateKey, mergedValues);
+            CaptureSavedState(includeOutput: false);
             StatusMessage = ValuesSavedStatus;
         }
         catch (Exception ex)

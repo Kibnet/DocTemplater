@@ -1,0 +1,105 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            9.0.x
+            10.0.402
+      - name: Debug build and tests
+        shell: pwsh
+        run: |
+          dotnet build DocTemplater.sln
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dotnet test DocTemplater.sln --no-build --logger trx --results-directory artifacts/tests/debug --blame-hang-timeout 60s
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Release build and tests
+        shell: pwsh
+        run: |
+          dotnet build DocTemplater.sln -c Release
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dotnet test DocTemplater.sln -c Release --no-build --logger trx --results-directory artifacts/tests/release --blame-hang-timeout 60s
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Pack
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $version = $env:RELEASE_TAG.Substring(1)
+          ./scripts/Build-Release.ps1 -Version $version
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation
+          path: artifacts/tests
+      - uses: actions/upload-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          name: release-assets
+          path: artifacts/release/releases/*
+          if-no-files-found: error
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: assets
+      - name: Publish complete release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = $env:RELEASE_TAG
+          $version = $tag.Substring(1)
+          $existing = gh release view $tag --json isDraft 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            if (-not ($existing | ConvertFrom-Json).isDraft) { throw 'Published releases are immutable.' }
+          } else {
+            gh release create $tag --verify-tag --draft --title "DocTemplater $version" --notes-file "releases/$version.md"
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          $assetPaths = @(Get-ChildItem assets -File | ForEach-Object FullName)
+          gh release upload $tag @assetPaths --clobber
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $draft = gh release view $tag --json tagName,isDraft,assets | ConvertFrom-Json
+          if ($LASTEXITCODE -or -not $draft.isDraft -or $draft.tagName -ne $tag) { throw 'Draft identity mismatch.' }
+          $remoteCommit = gh api "repos/$env:GITHUB_REPOSITORY/commits/$tag" --jq .sha
+          if ($LASTEXITCODE -or $remoteCommit -ne $env:RELEASE_SHA) { throw 'Tag no longer points to tested commit.' }
+          $local = @(Get-ChildItem assets -File)
+          if ($draft.assets.Count -ne $local.Count) { throw 'Unexpected remote assets.' }
+          foreach ($file in $local) {
+            $remote = @($draft.assets | Where-Object name -eq $file.Name)
+            if ($remote.Count -ne 1 -or $remote[0].size -ne $file.Length) { throw "Asset mismatch: $($file.Name)" }
+          }
+          gh release download $tag --dir verified
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          foreach ($file in $local) {
+            if ((Get-FileHash -LiteralPath $file.FullName).Hash -ne (Get-FileHash -LiteralPath (Join-Path verified $file.Name)).Hash) { throw "Remote hash mismatch: $($file.Name)" }
+          }
+          gh release edit $tag --draft=false --latest
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }

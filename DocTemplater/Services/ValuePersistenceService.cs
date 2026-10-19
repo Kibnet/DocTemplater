@@ -51,12 +51,15 @@ public class ValuePersistenceService : IValuePersistenceService
             if (!File.Exists(_settingsFilePath))
             {
                 _logger?.LogInformation("Файл настроек не найден, создание по умолчанию");
-                await WriteSettingsCoreAsync(new AppSettings());
+                await WriteSettingsCoreAsync(new AppSettings { TemplatesFolderPath = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_settingsFilePath))!, "Templates") });
                 return _cachedSettings!;
             }
 
             var json = await File.ReadAllTextAsync(_settingsFilePath);
-            _cachedSettings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
+            _cachedSettings = JsonSerializer.Deserialize<AppSettings>(json)
+                ?? throw new InvalidDataException("Файл настроек содержит null.");
+            if (_cachedSettings.Templates == null || _cachedSettings.Templates.Any(t => t.FieldValues == null))
+                throw new InvalidDataException("Повреждена структура настроек.");
             
             _logger?.LogInformation("Настройки загружены из {Path}", _settingsFilePath);
             return _cachedSettings;
@@ -64,8 +67,8 @@ public class ValuePersistenceService : IValuePersistenceService
         catch (Exception ex)
         {
             _logger?.LogError(ex, "Ошибка при загрузке настроек из {Path}", _settingsFilePath);
-            _cachedSettings = new AppSettings();
-            return _cachedSettings;
+            _cachedSettings = null;
+            throw new InvalidDataException($"Не удалось прочитать настройки {_settingsFilePath}. Исходный файл сохранён. Восстановите его из резервной копии и перезапустите приложение.", ex);
         }
     }
 
